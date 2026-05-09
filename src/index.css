@@ -1114,6 +1114,161 @@ body {
 
 .chat-send-btn:hover { opacity: 0.88; }
 
+/* ── 알림 패널 ── */
+.notif-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.notif-card {
+  background: #fff;
+  border: 1.5px solid #ffe0b2;
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.notif-card:hover { background: #fffaf5; }
+
+.notif-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.notif-bell { font-size: 1rem; flex-shrink: 0; }
+
+.notif-text {
+  flex: 1;
+  font-size: 0.82rem;
+  color: #333;
+  line-height: 1.4;
+}
+
+.notif-chevron {
+  font-size: 0.75rem;
+  color: #aaa;
+  flex-shrink: 0;
+}
+
+.notif-detail {
+  padding: 0 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid #ffeedd;
+  padding-top: 10px;
+  animation: fadeIn 0.2s ease both;
+}
+
+.notif-room-name {
+  font-size: 0.78rem;
+  color: #888;
+}
+
+.notif-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-notif-accept {
+  flex: 1;
+  padding: 9px;
+  background: linear-gradient(135deg, #87CEEB, #1a8fa0);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-notif-accept:hover { opacity: 0.88; }
+
+.btn-notif-decline {
+  flex: 1;
+  padding: 9px;
+  background: #f5f5f5;
+  color: #888;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-notif-decline:hover { background: #ebebeb; }
+
+/* 네비게이션 알림 점 */
+.nav-item { position: relative; }
+
+.nav-notif-dot {
+  position: absolute;
+  top: 6px;
+  right: 18px;
+  width: 7px;
+  height: 7px;
+  background: #ff5722;
+  border-radius: 50%;
+}
+
+/* 초대 유저 카드 */
+.invite-user-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #f0f8ff;
+  border: 1.5px solid #87CEEB;
+  border-radius: 14px;
+}
+
+.invite-user-avatar { font-size: 1.4rem; flex-shrink: 0; }
+
+.invite-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.invite-user-name {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #1a1a2e;
+}
+
+.invite-user-detail {
+  font-size: 0.75rem;
+  color: #888;
+}
+
+/* 채팅 입력 + 버튼 */
+.btn-plus {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #f0f8ff;
+  border: 1.5px solid #d0eaf0;
+  color: #1a8fa0;
+  font-size: 1.3rem;
+  font-weight: 300;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s;
+  line-height: 1;
+}
+
+.btn-plus:hover { background: #e0f4ff; }
+
 /* ── Random Match ── */
 .random-wrap {
   display: flex;

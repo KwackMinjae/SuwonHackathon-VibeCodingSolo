@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { MOCK_USERS, MockUser } from './RandomMatchScreen'
 
 export interface ChatMessage {
   id: number
@@ -165,6 +166,62 @@ function VerifyModal({ appointment, onVerify, onClose }: {
   )
 }
 
+// ── 친구 초대 모달 ──
+function InviteModal({ onClose, onInvite }: {
+  onClose: () => void
+  onInvite: (studentId: string, nickname: string) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [found, setFound] = useState<MockUser | null>(null)
+  const [searched, setSearched] = useState(false)
+
+  const handleSearch = () => {
+    setSearched(true)
+    setFound(MOCK_USERS.find(u => u.studentId === query.trim()) ?? null)
+  }
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-box">
+        <div className="modal-header">
+          <h3 className="modal-title">친구 초대</h3>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="input-group">
+          <label>학번으로 검색</label>
+          <div className="place-row">
+            <input
+              className="pw-input"
+              placeholder="학번 입력 (예: 20230101)"
+              value={query}
+              onChange={e => { setQuery(e.target.value); setSearched(false); setFound(null) }}
+              onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            />
+            <button className="btn-map-icon" onClick={handleSearch}>🔍</button>
+          </div>
+        </div>
+        {searched && !found && <p className="error-msg">해당 학번의 사용자를 찾을 수 없어요.</p>}
+        {found && (
+          <div className="invite-user-card">
+            <span className="invite-user-avatar">👤</span>
+            <div className="invite-user-info">
+              <span className="invite-user-name">{found.nickname}</span>
+              <span className="invite-user-detail">{found.studentId} · {found.dept}</span>
+            </div>
+          </div>
+        )}
+        <button
+          className="btn-login"
+          disabled={!found}
+          onClick={() => found && onInvite(found.studentId, found.nickname)}
+        >
+          참여 요청 보내기
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── 약속 카드 (채팅 메시지) ──
 function AppointmentCard({ appt, onAccept }: { appt: Appointment; onAccept: () => void }) {
   const openMap = () =>
@@ -233,12 +290,14 @@ interface RoomProps {
   onBack: () => void
   onSend: (text: string) => void
   onUpdateRoom: (room: ChatRoom) => void
+  onInvite: (studentId: string, nickname: string) => void
 }
 
-export function ChatRoomView({ room, onBack, onSend, onUpdateRoom }: RoomProps) {
+export function ChatRoomView({ room, onBack, onSend, onUpdateRoom, onInvite }: RoomProps) {
   const [input, setInput] = useState('')
   const [showAppModal, setShowAppModal] = useState(false)
   const [showVerifyModal, setShowVerifyModal] = useState(false)
+  const [showInviteModal, setShowInviteModal] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -299,6 +358,12 @@ export function ChatRoomView({ room, onBack, onSend, onUpdateRoom }: RoomProps) 
 
   return (
     <div className="chat-room-wrap">
+      {showInviteModal && (
+        <InviteModal
+          onClose={() => setShowInviteModal(false)}
+          onInvite={(sid, nick) => { onInvite(sid, nick); setShowInviteModal(false) }}
+        />
+      )}
       {showAppModal && (
         <AppointmentModal onClose={() => setShowAppModal(false)} onSend={handleSetAppointment} />
       )}
@@ -338,6 +403,7 @@ export function ChatRoomView({ room, onBack, onSend, onUpdateRoom }: RoomProps) 
       </div>
 
       <div className="chat-input-bar">
+        <button className="btn-plus" onClick={() => setShowInviteModal(true)}>+</button>
         <input
           className="chat-input"
           placeholder="메시지를 입력하세요"

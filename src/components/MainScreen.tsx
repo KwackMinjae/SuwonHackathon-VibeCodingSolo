@@ -7,6 +7,14 @@ import RandomMatchScreen, { UserProfile, MockUser } from './RandomMatchScreen'
 type Tab = '과팅' | '채팅방' | '설정'
 type SubScreen = null | 'notice' | 'random' | 'chatroom'
 
+interface ChatNotification {
+  id: number
+  senderNickname: string   // 초대 보낸 사람 (현재 유저)
+  invitedNickname: string  // 초대 받은 사람
+  roomId: number
+  roomTitle: string
+}
+
 interface Props {
   onLogout: () => void
   onAccountDeleted: () => void
@@ -24,6 +32,8 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
   const [sub, setSub] = useState<SubScreen>(null)
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([])
   const [activeRoom, setActiveRoom] = useState<ChatRoom | null>(null)
+  const [notifications, setNotifications] = useState<ChatNotification[]>([])
+  const [expandedNotif, setExpandedNotif] = useState<number | null>(null)
 
   const handleJoin = (title: string) => {
     const welcome: ChatMessage = {
@@ -89,6 +99,55 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
     setActiveRoom(updatedRoom)
   }
 
+  // 채팅방 초대 요청 생성 (채팅방 내 + 버튼)
+  const handleInvite = (studentId: string, invitedNickname: string) => {
+    if (!activeRoom) return
+
+    // 채팅방에 요청 전송 시스템 메시지
+    const sysMsg: ChatMessage = {
+      id: Date.now(),
+      text: `${invitedNickname}님에게 참여 요청을 보냈어요.`,
+      isMine: false,
+      senderName: '시스템',
+      time: nowTime(),
+    }
+    const updated = { ...activeRoom, messages: [...activeRoom.messages, sysMsg] }
+    setChatRooms(prev => prev.map(r => r.id === updated.id ? updated : r))
+    setActiveRoom(updated)
+
+    // 알림 생성
+    const newNotif: ChatNotification = {
+      id: Date.now() + 1,
+      senderNickname: currentUser.nickname,
+      invitedNickname,
+      roomId: activeRoom.id,
+      roomTitle: activeRoom.title,
+    }
+    setNotifications(prev => [...prev, newNotif])
+  }
+
+  // 알림 수락
+  const handleAccept = (notif: ChatNotification) => {
+    const joinMsg: ChatMessage = {
+      id: Date.now(),
+      text: `${notif.invitedNickname}님이 채팅방에 참여했어요.`,
+      isMine: false,
+      senderName: '시스템',
+      time: nowTime(),
+    }
+    setChatRooms(prev => prev.map(r =>
+      r.id === notif.roomId ? { ...r, messages: [...r.messages, joinMsg] } : r
+    ))
+    setNotifications(prev => prev.filter(n => n.id !== notif.id))
+    setExpandedNotif(null)
+  }
+
+  // 알림 거절
+  const handleDecline = (notifId: number) => {
+    setNotifications(prev => prev.filter(n => n.id !== notifId))
+    setExpandedNotif(null)
+  }
+
   if (sub === 'notice') return (
     <NoticeScreen onBack={() => setSub(null)} onJoin={handleJoin} />
   )
@@ -107,12 +166,43 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
       onBack={() => { setSub(null); setTab('채팅방') }}
       onSend={handleSend}
       onUpdateRoom={handleUpdateRoom}
+      onInvite={handleInvite}
     />
   )
 
   return (
     <div className="main-wrap">
       <div className="main-content">
+        {/* 알림 패널 */}
+        {notifications.length > 0 && (
+          <div className="notif-panel">
+            {notifications.map(n => (
+              <div key={n.id} className="notif-card" onClick={() => setExpandedNotif(expandedNotif === n.id ? null : n.id)}>
+                <div className="notif-card-top">
+                  <span className="notif-bell">🔔</span>
+                  <span className="notif-text">
+                    <strong>{n.senderNickname}</strong>님이 채팅방 참여를 요청합니다.
+                  </span>
+                  <span className="notif-chevron">{expandedNotif === n.id ? '∧' : '∨'}</span>
+                </div>
+                {expandedNotif === n.id && (
+                  <div className="notif-detail">
+                    <span className="notif-room-name">📌 {n.roomTitle}</span>
+                    <div className="notif-actions">
+                      <button className="btn-notif-accept" onClick={e => { e.stopPropagation(); handleAccept(n) }}>
+                        수락하기
+                      </button>
+                      <button className="btn-notif-decline" onClick={e => { e.stopPropagation(); handleDecline(n.id) }}>
+                        거절하기
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         {tab === '과팅'  && <GatingTab onNotice={() => setSub('notice')} onRandom={() => setSub('random')} />}
         {tab === '채팅방' && <ChatList rooms={chatRooms} onOpenRoom={handleOpenRoom} />}
         {tab === '설정'  && (
@@ -133,6 +223,9 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
           >
             <span className="nav-icon">{navIcon(t)}</span>
             <span className="nav-label">{t}</span>
+            {t === '과팅' && notifications.length > 0 && (
+              <span className="nav-notif-dot" />
+            )}
           </button>
         ))}
       </nav>

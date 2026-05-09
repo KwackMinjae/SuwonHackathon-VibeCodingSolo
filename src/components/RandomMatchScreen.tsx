@@ -11,7 +11,7 @@ export interface MockUser extends UserProfile {
   id: number
 }
 
-const MOCK_USERS: MockUser[] = [
+export const MOCK_USERS: MockUser[] = [
   { id: 1,  nickname: '민지',  studentId: '20230101', gender: '여', dept: '경영학부' },
   { id: 2,  nickname: '수아',  studentId: '20220202', gender: '여', dept: '인문학부' },
   { id: 3,  nickname: '하린',  studentId: '20230303', gender: '여', dept: '컴퓨터학부' },
