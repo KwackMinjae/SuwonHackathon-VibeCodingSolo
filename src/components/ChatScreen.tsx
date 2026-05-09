@@ -4,6 +4,7 @@ export interface ChatMessage {
   id: number
   text: string
   isMine: boolean
+  senderName?: string
   time: string
   isAppointment?: boolean
 }
@@ -323,6 +324,9 @@ export function ChatRoomView({ room, onBack, onSend, onUpdateRoom }: RoomProps) 
             </div>
           ) : (
             <div key={msg.id} className={`chat-bubble-wrap ${msg.isMine ? 'mine' : 'theirs'}`}>
+              {!msg.isMine && msg.senderName && (
+                <span className="chat-sender-name">{msg.senderName}</span>
+              )}
               <div className={`chat-bubble ${msg.isMine ? 'bubble-mine' : 'bubble-theirs'}`}>
                 {msg.text}
               </div>

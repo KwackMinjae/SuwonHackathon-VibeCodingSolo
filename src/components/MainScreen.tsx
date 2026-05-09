@@ -2,14 +2,16 @@ import { useState } from 'react'
 import SettingsTab from './SettingsTab'
 import NoticeScreen from './NoticeScreen'
 import { ChatList, ChatRoomView, ChatRoom, ChatMessage } from './ChatScreen'
+import RandomMatchScreen, { UserProfile, MockUser } from './RandomMatchScreen'
 
 type Tab = '과팅' | '채팅방' | '설정'
-type SubScreen = null | 'notice' | 'chatroom'
+type SubScreen = null | 'notice' | 'random' | 'chatroom'
 
 interface Props {
   onLogout: () => void
   onAccountDeleted: () => void
   onPasswordReset: () => void
+  currentUser: UserProfile
 }
 
 function nowTime() {
@@ -17,7 +19,7 @@ function nowTime() {
   return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset }: Props) {
+export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset, currentUser }: Props) {
   const [tab, setTab] = useState<Tab>('과팅')
   const [sub, setSub] = useState<SubScreen>(null)
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([])
@@ -36,6 +38,33 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
     setTab('채팅방')
   }
 
+  const handleMatchSuccess = (matchedUsers: MockUser[], size: number) => {
+    const t = nowTime()
+    const systemMsg: ChatMessage = {
+      id: Date.now(),
+      text: `🎉 ${size}v${size} 랜덤매칭이 완료되었어요!`,
+      isMine: false,
+      senderName: '시스템',
+      time: t,
+    }
+    const introMsgs: ChatMessage[] = matchedUsers.map((u, i) => ({
+      id: Date.now() + i + 1,
+      text: `안녕하세요! 저는 ${u.nickname}이에요 😊`,
+      isMine: false,
+      senderName: `${u.nickname}/${u.studentId}`,
+      time: t,
+    }))
+    const newRoom: ChatRoom = {
+      id: Date.now() + 1000,
+      title: `${size}v${size} 랜덤매칭`,
+      messages: [systemMsg, ...introMsgs],
+    }
+    setChatRooms(prev => [...prev, newRoom])
+    setActiveRoom(newRoom)
+    setSub('chatroom')
+    setTab('채팅방')
+  }
+
   const handleOpenRoom = (room: ChatRoom) => {
     setActiveRoom(room)
     setSub('chatroom')
@@ -43,7 +72,13 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
 
   const handleSend = (text: string) => {
     if (!activeRoom) return
-    const msg: ChatMessage = { id: Date.now(), text, isMine: true, time: nowTime() }
+    const msg: ChatMessage = {
+      id: Date.now(),
+      text,
+      isMine: true,
+      senderName: `${currentUser.nickname}/${currentUser.studentId}`,
+      time: nowTime(),
+    }
     const updated = { ...activeRoom, messages: [...activeRoom.messages, msg] }
     setChatRooms(prev => prev.map(r => r.id === updated.id ? updated : r))
     setActiveRoom(updated)
@@ -58,6 +93,14 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
     <NoticeScreen onBack={() => setSub(null)} onJoin={handleJoin} />
   )
 
+  if (sub === 'random') return (
+    <RandomMatchScreen
+      onBack={() => setSub(null)}
+      currentUser={currentUser}
+      onMatchSuccess={handleMatchSuccess}
+    />
+  )
+
   if (sub === 'chatroom' && activeRoom) return (
     <ChatRoomView
       room={activeRoom}
@@ -70,7 +113,7 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
   return (
     <div className="main-wrap">
       <div className="main-content">
-        {tab === '과팅'  && <GatingTab onNotice={() => setSub('notice')} />}
+        {tab === '과팅'  && <GatingTab onNotice={() => setSub('notice')} onRandom={() => setSub('random')} />}
         {tab === '채팅방' && <ChatList rooms={chatRooms} onOpenRoom={handleOpenRoom} />}
         {tab === '설정'  && (
           <SettingsTab
@@ -119,7 +162,7 @@ function navIcon(tab: Tab) {
   )
 }
 
-function GatingTab({ onNotice }: { onNotice: () => void }) {
+function GatingTab({ onNotice, onRandom }: { onNotice: () => void; onRandom: () => void }) {
   return (
     <div className="gating-tab">
       <div className="gating-header">
@@ -135,7 +178,7 @@ function GatingTab({ onNotice }: { onNotice: () => void }) {
           </div>
           <span className="card-arrow">›</span>
         </button>
-        <button className="gating-card card-random">
+        <button className="gating-card card-random" onClick={onRandom}>
           <div className="card-icon">🎲</div>
           <div className="card-text">
             <span className="card-title">랜덤매칭</span>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { UserProfile } from './RandomMatchScreen'
 
 const DEPARTMENTS = [
   '인문학부', '외국어학부', '법행정학부', '미디어커뮤니케이션학과',
@@ -17,9 +18,10 @@ type Step = 'email' | 'verify' | 'info'
 
 interface Props {
   onBack: () => void
+  onComplete?: (user: UserProfile) => void
 }
 
-export default function SignupScreen({ onBack }: Props) {
+export default function SignupScreen({ onBack, onComplete }: Props) {
   const [step, setStep] = useState<Step>('email')
 
   // 이메일 인증
@@ -70,6 +72,12 @@ export default function SignupScreen({ onBack }: Props) {
     if (Object.keys(newErrors).length > 0) return
 
     alert('회원가입이 완료됐어요!')
+    onComplete?.({
+      nickname,
+      studentId: emailId,
+      gender: gender as '남' | '여',
+      dept: department,
+    })
     onBack()
   }
 
