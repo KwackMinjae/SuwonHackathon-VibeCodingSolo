@@ -3,9 +3,10 @@ import { useState } from 'react'
 interface Props {
   onSignup: () => void
   onForgot: () => void
+  onLogin: () => void
 }
 
-export default function LoginScreen({ onSignup, onForgot }: Props) {
+export default function LoginScreen({ onSignup, onForgot, onLogin }: Props) {
   const [emailId, setEmailId] = useState('')
   const [password, setPassword] = useState('')
   const [pwError, setPwError] = useState('')
@@ -16,7 +17,7 @@ export default function LoginScreen({ onSignup, onForgot }: Props) {
       return
     }
     setPwError('')
-    alert(`${emailId}@suwon.ac.kr 로그인 시도`)
+    onLogin()
   }
 
   return (

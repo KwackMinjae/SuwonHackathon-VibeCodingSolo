@@ -3,8 +3,9 @@ import SplashScreen from './components/SplashScreen'
 import LoginScreen from './components/LoginScreen'
 import ForgotPasswordScreen from './components/ForgotPasswordScreen'
 import SignupScreen from './components/SignupScreen'
+import MainScreen from './components/MainScreen'
 
-type Screen = 'splash' | 'login' | 'forgot' | 'signup'
+type Screen = 'splash' | 'login' | 'forgot' | 'signup' | 'main'
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('splash')
@@ -17,12 +18,14 @@ export default function App() {
   return (
     <div className="phone-frame">
       {screen === 'splash' && <SplashScreen />}
-      {screen !== 'splash' && (
+      {screen === 'main'   && <MainScreen />}
+      {screen !== 'splash' && screen !== 'main' && (
         <div className="app-shell">
           {screen === 'login' && (
             <LoginScreen
               onForgot={() => setScreen('forgot')}
               onSignup={() => setScreen('signup')}
+              onLogin={() => setScreen('main')}
             />
           )}
           {screen === 'forgot' && (
