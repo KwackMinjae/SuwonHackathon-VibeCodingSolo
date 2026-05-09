@@ -183,7 +183,7 @@ export default function NoticeScreen({ onBack }: Props) {
             value={content}
             onChange={e => { setContent(e.target.value); setErrors(p => ({ ...p, content: '' })) }}
             className={`notice-textarea ${errors.content ? 'error' : ''}`}
-            rows={7}
+            rows={5}
           />
           {errors.content && <p className="error-msg">{errors.content}</p>}
         </div>

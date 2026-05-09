@@ -483,8 +483,10 @@ body {
 .notice-wrap {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  height: 100%;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  padding: 24px 20px 20px;
   animation: fadeIn 0.3s ease both;
 }
 
@@ -530,8 +532,8 @@ body {
 .notice-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 16px;
+  gap: 6px;
+  padding: 12px 14px;
   background: #fff;
   border: 1.5px solid #e8f4f8;
   border-radius: 16px;
@@ -595,9 +597,10 @@ body {
 .create-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
 }
 
 .create-form::-webkit-scrollbar { display: none; }
