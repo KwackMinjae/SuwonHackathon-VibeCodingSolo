@@ -18,7 +18,13 @@ export default function App() {
   return (
     <div className="phone-frame">
       {screen === 'splash' && <SplashScreen />}
-      {screen === 'main'   && <MainScreen />}
+      {screen === 'main'   && (
+        <MainScreen
+          onLogout={() => setScreen('login')}
+          onAccountDeleted={() => setScreen('login')}
+          onPasswordReset={() => setScreen('login')}
+        />
+      )}
       {screen !== 'splash' && screen !== 'main' && (
         <div className="app-shell">
           {screen === 'login' && (

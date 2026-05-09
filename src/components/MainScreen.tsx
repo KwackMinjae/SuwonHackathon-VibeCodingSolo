@@ -1,20 +1,31 @@
 import { useState } from 'react'
+import SettingsTab from './SettingsTab'
 
 type Tab = '과팅' | '채팅방' | '설정'
 
-export default function MainScreen() {
+interface Props {
+  onLogout: () => void
+  onAccountDeleted: () => void
+  onPasswordReset: () => void
+}
+
+export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset }: Props) {
   const [tab, setTab] = useState<Tab>('과팅')
 
   return (
     <div className="main-wrap">
-      {/* 콘텐츠 영역 */}
       <div className="main-content">
-        {tab === '과팅' && <GatingTab />}
+        {tab === '과팅'  && <GatingTab />}
         {tab === '채팅방' && <PlaceholderTab title="채팅방" />}
-        {tab === '설정' && <PlaceholderTab title="설정" />}
+        {tab === '설정'  && (
+          <SettingsTab
+            onLogout={onLogout}
+            onAccountDeleted={onAccountDeleted}
+            onPasswordReset={onPasswordReset}
+          />
+        )}
       </div>
 
-      {/* 하단 네비게이션 바 */}
       <nav className="bottom-nav">
         {(['과팅', '채팅방', '설정'] as Tab[]).map(t => (
           <button
@@ -60,7 +71,6 @@ function GatingTab() {
         <h2 className="gating-title">수원시그널</h2>
         <p className="gating-subtitle">설레는 과팅을 시작해보세요 💙</p>
       </div>
-
       <div className="gating-cards">
         <button className="gating-card card-notice">
           <div className="card-icon">📋</div>
@@ -70,7 +80,6 @@ function GatingTab() {
           </div>
           <span className="card-arrow">›</span>
         </button>
-
         <button className="gating-card card-random">
           <div className="card-icon">🎲</div>
           <div className="card-text">

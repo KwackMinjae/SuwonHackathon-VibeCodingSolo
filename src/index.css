@@ -479,6 +479,73 @@ body {
   font-weight: 600;
 }
 
+/* ── Settings ── */
+.settings-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  animation: fadeIn 0.3s ease both;
+}
+
+.settings-title {
+  font-size: 1.7rem;
+  font-weight: 800;
+  color: #1a8fa0;
+}
+
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 16px;
+  background: #fff;
+  border: 1.5px solid #e8f4f8;
+  border-radius: 16px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+  width: 100%;
+}
+
+.settings-item:hover {
+  background: #f0f8ff;
+}
+
+.settings-item.danger {
+  border-color: #fde8e8;
+}
+
+.settings-item.danger:hover {
+  background: #fff5f5;
+}
+
+.settings-item.danger .settings-item-label {
+  color: #e74c3c;
+}
+
+.settings-item-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.settings-item-label {
+  flex: 1;
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.settings-item-arrow {
+  font-size: 1.4rem;
+  color: #ccc;
+}
+
 /* ── 애니메이션 ── */
 @keyframes fadeIn {
   from { opacity: 0; }
