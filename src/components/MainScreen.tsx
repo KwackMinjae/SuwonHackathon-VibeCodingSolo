@@ -34,6 +34,7 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
   const [activeRoom, setActiveRoom] = useState<ChatRoom | null>(null)
   const [notifications, setNotifications] = useState<ChatNotification[]>([])
   const [expandedNotif, setExpandedNotif] = useState<number | null>(null)
+  const [showNotifPanel, setShowNotifPanel] = useState(false)
 
   const handleJoin = (title: string) => {
     const welcome: ChatMessage = {
@@ -172,11 +173,30 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
 
   return (
     <div className="main-wrap">
-      <div className="main-content">
-        {/* 알림 패널 */}
-        {notifications.length > 0 && (
-          <div className="notif-panel">
-            {notifications.map(n => (
+      {/* 상단 알림 바 */}
+      <div className="main-topbar">
+        <span className="main-topbar-title">수원시그널</span>
+        <button
+          className={`btn-bell ${showNotifPanel ? 'active' : ''}`}
+          onClick={() => { setShowNotifPanel(p => !p); setExpandedNotif(null) }}
+        >
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          </svg>
+          {notifications.length > 0 && (
+            <span className="bell-badge">{notifications.length}</span>
+          )}
+        </button>
+      </div>
+
+      {/* 알림 패널 */}
+      {showNotifPanel && (
+        <div className="notif-panel">
+          {notifications.length === 0 ? (
+            <div className="notif-empty">새로운 알림이 없어요.</div>
+          ) : (
+            notifications.map(n => (
               <div key={n.id} className="notif-card" onClick={() => setExpandedNotif(expandedNotif === n.id ? null : n.id)}>
                 <div className="notif-card-top">
                   <span className="notif-bell">🔔</span>
@@ -199,10 +219,12 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
                   </div>
                 )}
               </div>
-            ))}
-          </div>
-        )}
+            ))
+          )}
+        </div>
+      )}
 
+      <div className="main-content">
         {tab === '과팅'  && <GatingTab onNotice={() => setSub('notice')} onRandom={() => setSub('random')} />}
         {tab === '채팅방' && <ChatList rooms={chatRooms} onOpenRoom={handleOpenRoom} />}
         {tab === '설정'  && (
@@ -223,9 +245,6 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
           >
             <span className="nav-icon">{navIcon(t)}</span>
             <span className="nav-label">{t}</span>
-            {t === '과팅' && notifications.length > 0 && (
-              <span className="nav-notif-dot" />
-            )}
           </button>
         ))}
       </nav>
@@ -259,7 +278,6 @@ function GatingTab({ onNotice, onRandom }: { onNotice: () => void; onRandom: () 
   return (
     <div className="gating-tab">
       <div className="gating-header">
-        <h2 className="gating-title">수원시그널</h2>
         <p className="gating-subtitle">설레는 과팅을 시작해보세요 💙</p>
       </div>
       <div className="gating-cards">

@@ -318,6 +318,63 @@ body {
 .dept-select.error { border-color: #e74c3c; }
 
 /* ── Main ── */
+.main-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 8px;
+  flex-shrink: 0;
+}
+
+.main-topbar-title {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #1a8fa0;
+}
+
+.btn-bell {
+  position: relative;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #aaa;
+  padding: 4px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s, background 0.2s;
+}
+
+.btn-bell:hover, .btn-bell.active {
+  color: #1a8fa0;
+  background: #e0f4ff;
+}
+
+.bell-badge {
+  position: absolute;
+  top: 0px;
+  right: 0px;
+  width: 16px;
+  height: 16px;
+  background: #ff5722;
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.notif-empty {
+  text-align: center;
+  font-size: 0.85rem;
+  color: #bbb;
+  padding: 12px 0;
+}
+
 .main-wrap {
   display: flex;
   flex-direction: column;
@@ -1169,7 +1226,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 12px;
+  padding: 0 20px 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid #f0f8ff;
+  animation: fadeIn 0.2s ease both;
 }
 
 .notif-card {
