@@ -14,21 +14,24 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [])
 
-  if (screen === 'splash') return <SplashScreen />
-
   return (
-    <div className="app-shell">
-      {screen === 'login' && (
-        <LoginScreen
-          onForgot={() => setScreen('forgot')}
-          onSignup={() => setScreen('signup')}
-        />
-      )}
-      {screen === 'forgot' && (
-        <ForgotPasswordScreen onBack={() => setScreen('login')} />
-      )}
-      {screen === 'signup' && (
-        <SignupScreen onBack={() => setScreen('login')} />
+    <div className="phone-frame">
+      {screen === 'splash' && <SplashScreen />}
+      {screen !== 'splash' && (
+        <div className="app-shell">
+          {screen === 'login' && (
+            <LoginScreen
+              onForgot={() => setScreen('forgot')}
+              onSignup={() => setScreen('signup')}
+            />
+          )}
+          {screen === 'forgot' && (
+            <ForgotPasswordScreen onBack={() => setScreen('login')} />
+          )}
+          {screen === 'signup' && (
+            <SignupScreen onBack={() => setScreen('login')} />
+          )}
+        </div>
       )}
     </div>
   )
