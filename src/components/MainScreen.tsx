@@ -49,6 +49,11 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
     setActiveRoom(updated)
   }
 
+  const handleUpdateRoom = (updatedRoom: ChatRoom) => {
+    setChatRooms(prev => prev.map(r => r.id === updatedRoom.id ? updatedRoom : r))
+    setActiveRoom(updatedRoom)
+  }
+
   if (sub === 'notice') return (
     <NoticeScreen onBack={() => setSub(null)} onJoin={handleJoin} />
   )
@@ -58,6 +63,7 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
       room={activeRoom}
       onBack={() => { setSub(null); setTab('채팅방') }}
       onSend={handleSend}
+      onUpdateRoom={handleUpdateRoom}
     />
   )
 

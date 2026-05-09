@@ -694,6 +694,236 @@ body {
   white-space: pre-wrap;
 }
 
+/* ── Modal ── */
+.modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-end;
+  z-index: 200;
+}
+
+.modal-box {
+  background: #fff;
+  border-radius: 24px 24px 0 0;
+  padding: 24px 24px 40px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: slideUp 0.25s ease both;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #1a1a2e;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  color: #aaa;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.place-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.place-row .pw-input { flex: 1; }
+
+.btn-map-icon {
+  padding: 11px 14px;
+  background: #f0f8ff;
+  border: 1.5px solid #d0eaf0;
+  border-radius: 12px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.btn-map-icon:hover { background: #e0f4ff; }
+
+/* 약속 카드 (채팅 메시지) */
+.appt-card-wrapper {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0;
+}
+
+.appt-card {
+  background: linear-gradient(135deg, #e8f8ff, #f5fdff);
+  border: 1.5px solid #87CEEB;
+  border-radius: 16px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.appt-card-title {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #1a8fa0;
+}
+
+.appt-card-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.84rem;
+  color: #333;
+}
+
+.appt-card-icon { flex-shrink: 0; }
+
+.appt-card-text { flex: 1; }
+
+.btn-map-small {
+  margin-left: auto;
+  padding: 3px 9px;
+  background: #fff;
+  border: 1px solid #87CEEB;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  color: #1a8fa0;
+  cursor: pointer;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.btn-accept {
+  width: 100%;
+  padding: 10px;
+  background: linear-gradient(135deg, #87CEEB, #1a8fa0);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 2px;
+  transition: opacity 0.2s;
+}
+
+.btn-accept:hover { opacity: 0.88; }
+
+.appt-accepted {
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #1a8fa0;
+  padding: 6px 0;
+}
+
+/* 채팅방 헤더 버튼 */
+.btn-appt-header {
+  background: #e0f4ff;
+  border: 1.5px solid #87CEEB;
+  border-radius: 20px;
+  padding: 5px 10px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #1a8fa0;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.btn-appt-header:hover { background: #c6eaf8; }
+
+.btn-verify-header {
+  background: linear-gradient(135deg, #87CEEB, #1a8fa0);
+  border: none;
+  border-radius: 20px;
+  padding: 5px 10px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity 0.2s;
+}
+
+.btn-verify-header:hover { opacity: 0.88; }
+
+.btn-verified-header {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #1a8fa0;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 인증 모달 내용 */
+.verify-info-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: #f0f8ff;
+  border-radius: 14px;
+}
+
+.verify-info-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.verify-info-label {
+  font-size: 0.73rem;
+  color: #999;
+  font-weight: 600;
+}
+
+.verify-info-value {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.verify-status {
+  text-align: center;
+  font-size: 0.88rem;
+  color: #666;
+  line-height: 1.7;
+  white-space: pre-line;
+  padding: 6px 0;
+}
+
+.verify-status.error { color: #e74c3c; }
+.verify-status.ok { color: #1a8fa0; font-weight: 700; }
+
+.verify-done {
+  text-align: center;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #1a8fa0;
+  padding: 16px 0;
+}
+
 /* ── Chat List ── */
 .chat-list-wrap {
   display: flex;
