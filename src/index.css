@@ -257,3 +257,79 @@ body {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* ── Signup ── */
+.label-hint {
+  font-size: 0.75rem;
+  color: #aaa;
+  font-weight: 400;
+}
+
+.input-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 18px;
+}
+
+.char-count {
+  font-size: 0.75rem;
+  color: #aaa;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.gender-row {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-gender {
+  flex: 1;
+  padding: 12px;
+  border: 2px solid #d0eaf0;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #aaa;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-gender.selected {
+  border-color: #1a8fa0;
+  color: #1a8fa0;
+  background: #f0f8ff;
+}
+
+.student-id-box {
+  padding: 12px 14px;
+  background: #f0f8ff;
+  border: 1.5px solid #d0eaf0;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  color: #1a8fa0;
+  font-weight: 600;
+}
+
+.dept-select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid #d0eaf0;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  outline: none;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.dept-select:focus {
+  border-color: #87CEEB;
+}
+
+.dept-select.error {
+  border-color: #e74c3c;
+}

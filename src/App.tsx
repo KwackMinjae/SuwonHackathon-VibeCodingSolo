@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import SplashScreen from './components/SplashScreen'
 import LoginScreen from './components/LoginScreen'
 import ForgotPasswordScreen from './components/ForgotPasswordScreen'
+import SignupScreen from './components/SignupScreen'
 
 type Screen = 'splash' | 'login' | 'forgot' | 'signup'
 
@@ -25,6 +26,9 @@ export default function App() {
       )}
       {screen === 'forgot' && (
         <ForgotPasswordScreen onBack={() => setScreen('login')} />
+      )}
+      {screen === 'signup' && (
+        <SignupScreen onBack={() => setScreen('login')} />
       )}
     </div>
   )
