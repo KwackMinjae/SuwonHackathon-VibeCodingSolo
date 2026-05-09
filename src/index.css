@@ -588,9 +588,59 @@ body {
   line-height: 1.5;
 }
 
+.notice-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .notice-card-date {
   font-size: 0.75rem;
   color: #ccc;
+}
+
+.notice-applicants {
+  font-size: 0.73rem;
+  color: #1a8fa0;
+  font-weight: 600;
+}
+
+.notice-badge-group {
+  flex-shrink: 0;
+}
+
+.badge-closed {
+  background: #f0f0f0;
+  color: #aaa;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 20px;
+}
+
+.notice-card.closed {
+  opacity: 0.6;
+}
+
+.notice-card.closed .notice-card-title {
+  color: #aaa;
+}
+
+.notice-detail-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.notice-closed-msg {
+  margin-top: auto;
+  padding: 14px;
+  background: #f5f5f5;
+  border-radius: 14px;
+  text-align: center;
+  font-size: 0.88rem;
+  color: #aaa;
+  font-weight: 600;
 }
 
 /* 글쓰기 폼 */

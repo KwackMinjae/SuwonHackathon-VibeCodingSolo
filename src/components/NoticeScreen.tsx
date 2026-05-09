@@ -11,6 +11,8 @@ interface Post {
   count: number
   content: string
   createdAt: string
+  applicants: number
+  closed: boolean
 }
 
 interface Props {
@@ -29,6 +31,8 @@ export default function NoticeScreen({ onBack, onJoin }: Props) {
       count: 2,
       content: '저희는 여자 1명인데요, 같이 나갈 여자분 2명 더 구합니다! 편하게 연락주세요 😊',
       createdAt: '2026.05.09',
+      applicants: 0,
+      closed: false,
     },
     {
       id: 2,
@@ -38,6 +42,8 @@ export default function NoticeScreen({ onBack, onJoin }: Props) {
       count: 3,
       content: '저희 여자 3명입니다. 상대 남자 3명 구해요. 분위기 좋은 분들 환영!',
       createdAt: '2026.05.09',
+      applicants: 0,
+      closed: false,
     },
   ])
   const [selected, setSelected] = useState<Post | null>(null)
@@ -70,10 +76,25 @@ export default function NoticeScreen({ onBack, onJoin }: Props) {
       count,
       content: content.trim(),
       createdAt: new Date().toLocaleDateString('ko-KR').replace(/\. /g, '.').replace('.', ''),
+      applicants: 0,
+      closed: false,
     }
     setPosts(prev => [newPost, ...prev])
     resetForm()
     setView('list')
+  }
+
+  const handleJoinRequest = () => {
+    if (!selected || selected.closed) return
+
+    const newApplicants = selected.applicants + 1
+    const nowClosed = newApplicants >= selected.count
+
+    const updated: Post = { ...selected, applicants: newApplicants, closed: nowClosed }
+    setPosts(prev => prev.map(p => p.id === selected.id ? updated : p))
+    setSelected(updated)
+
+    onJoin?.(selected.title)
   }
 
   // ── 목록 ──
@@ -90,17 +111,32 @@ export default function NoticeScreen({ onBack, onJoin }: Props) {
           <div className="notice-empty">아직 공고가 없어요.<br />첫 번째 공고를 올려보세요!</div>
         )}
         {posts.map(post => (
-          <button key={post.id} className="notice-card" onClick={() => { setSelected(post); setView('detail') }}>
+          <button
+            key={post.id}
+            className={`notice-card ${post.closed ? 'closed' : ''}`}
+            onClick={() => { setSelected(post); setView('detail') }}
+          >
             <div className="notice-card-top">
               <span className="notice-card-title">{post.title}</span>
-              <span className={`notice-badge ${post.type === '같이나갈사람' ? 'badge-team' : 'badge-partner'}`}>
-                {post.type === '같이나갈사람'
-                  ? `같이나갈 ${post.gender} ${post.count}명`
-                  : `상대 ${post.gender}자 ${post.count}명`}
-              </span>
+              <div className="notice-badge-group">
+                {post.closed ? (
+                  <span className="notice-badge badge-closed">마감</span>
+                ) : (
+                  <span className={`notice-badge ${post.type === '같이나갈사람' ? 'badge-team' : 'badge-partner'}`}>
+                    {post.type === '같이나갈사람'
+                      ? `같이나갈 ${post.gender} ${post.count}명`
+                      : `상대 ${post.gender}자 ${post.count}명`}
+                  </span>
+                )}
+              </div>
             </div>
             <p className="notice-card-preview">{post.content}</p>
-            <span className="notice-card-date">{post.createdAt}</span>
+            <div className="notice-card-footer">
+              <span className="notice-card-date">{post.createdAt}</span>
+              {!post.closed && (
+                <span className="notice-applicants">{post.applicants}/{post.count}명 신청</span>
+              )}
+            </div>
           </button>
         ))}
       </div>
@@ -117,7 +153,6 @@ export default function NoticeScreen({ onBack, onJoin }: Props) {
       </div>
 
       <div className="create-form">
-        {/* 제목 + 타입 선택 */}
         <div className="title-type-row">
           <div className="input-group" style={{ flex: 1 }}>
             <label>제목</label>
@@ -143,7 +178,6 @@ export default function NoticeScreen({ onBack, onJoin }: Props) {
           </div>
         </div>
 
-        {/* 성별 + 인원 */}
         <div className="gender-count-row">
           <div className="input-group" style={{ flex: 1 }}>
             <label>
@@ -176,7 +210,6 @@ export default function NoticeScreen({ onBack, onJoin }: Props) {
           </div>
         </div>
 
-        {/* 자유 글쓰기 */}
         <div className="input-group">
           <label>내용</label>
           <textarea
@@ -206,16 +239,31 @@ export default function NoticeScreen({ onBack, onJoin }: Props) {
         <div className="notice-detail">
           <div className="notice-detail-top">
             <h3 className="notice-detail-title">{selected.title}</h3>
-            <span className={`notice-badge ${selected.type === '같이나갈사람' ? 'badge-team' : 'badge-partner'}`}>
-              {selected.type === '같이나갈사람'
-                ? `같이나갈 ${selected.gender} ${selected.count}명`
-                : `상대 ${selected.gender}자 ${selected.count}명`}
-            </span>
+            {selected.closed ? (
+              <span className="notice-badge badge-closed">마감</span>
+            ) : (
+              <span className={`notice-badge ${selected.type === '같이나갈사람' ? 'badge-team' : 'badge-partner'}`}>
+                {selected.type === '같이나갈사람'
+                  ? `같이나갈 ${selected.gender} ${selected.count}명`
+                  : `상대 ${selected.gender}자 ${selected.count}명`}
+              </span>
+            )}
           </div>
-          <span className="notice-card-date">{selected.createdAt}</span>
+          <div className="notice-detail-meta">
+            <span className="notice-card-date">{selected.createdAt}</span>
+            {!selected.closed && (
+              <span className="notice-applicants">{selected.applicants}/{selected.count}명 신청</span>
+            )}
+          </div>
           <div className="notice-detail-divider" />
           <p className="notice-detail-content">{selected.content}</p>
-          <button className="btn-login" style={{ marginTop: 'auto' }} onClick={() => selected && onJoin?.(selected.title)}>참여 신청하기</button>
+          {selected.closed ? (
+            <div className="notice-closed-msg">모집이 마감된 공고예요.</div>
+          ) : (
+            <button className="btn-login" style={{ marginTop: 'auto' }} onClick={handleJoinRequest}>
+              참여 신청하기
+            </button>
+          )}
         </div>
       )}
     </div>
