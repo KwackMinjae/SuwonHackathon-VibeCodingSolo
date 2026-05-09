@@ -15,9 +15,10 @@ interface Post {
 
 interface Props {
   onBack: () => void
+  onJoin?: (title: string) => void
 }
 
-export default function NoticeScreen({ onBack }: Props) {
+export default function NoticeScreen({ onBack, onJoin }: Props) {
   const [view, setView] = useState<'list' | 'create' | 'detail'>('list')
   const [posts, setPosts] = useState<Post[]>([
     {
@@ -214,7 +215,7 @@ export default function NoticeScreen({ onBack }: Props) {
           <span className="notice-card-date">{selected.createdAt}</span>
           <div className="notice-detail-divider" />
           <p className="notice-detail-content">{selected.content}</p>
-          <button className="btn-login" style={{ marginTop: 'auto' }}>참여 신청하기</button>
+          <button className="btn-login" style={{ marginTop: 'auto' }} onClick={() => selected && onJoin?.(selected.title)}>참여 신청하기</button>
         </div>
       )}
     </div>

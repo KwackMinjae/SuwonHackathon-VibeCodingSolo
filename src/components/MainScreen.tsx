@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import SettingsTab from './SettingsTab'
 import NoticeScreen from './NoticeScreen'
+import { ChatList, ChatRoomView, ChatRoom, ChatMessage } from './ChatScreen'
 
 type Tab = '과팅' | '채팅방' | '설정'
-type SubScreen = null | 'notice' | 'random'
+type SubScreen = null | 'notice' | 'chatroom'
 
 interface Props {
   onLogout: () => void
@@ -11,17 +12,60 @@ interface Props {
   onPasswordReset: () => void
 }
 
+function nowTime() {
+  const d = new Date()
+  return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset }: Props) {
   const [tab, setTab] = useState<Tab>('과팅')
   const [sub, setSub] = useState<SubScreen>(null)
+  const [chatRooms, setChatRooms] = useState<ChatRoom[]>([])
+  const [activeRoom, setActiveRoom] = useState<ChatRoom | null>(null)
 
-  if (sub === 'notice') return <NoticeScreen onBack={() => setSub(null)} />
+  const handleJoin = (title: string) => {
+    const welcome: ChatMessage = {
+      id: Date.now(),
+      text: '채팅방에 참여했어요! 인사를 건네보세요 👋',
+      isMine: false,
+      time: nowTime(),
+    }
+    const newRoom: ChatRoom = { id: Date.now() + 1, title, messages: [welcome] }
+    setChatRooms(prev => [...prev, newRoom])
+    setSub(null)
+    setTab('채팅방')
+  }
+
+  const handleOpenRoom = (room: ChatRoom) => {
+    setActiveRoom(room)
+    setSub('chatroom')
+  }
+
+  const handleSend = (text: string) => {
+    if (!activeRoom) return
+    const msg: ChatMessage = { id: Date.now(), text, isMine: true, time: nowTime() }
+    const updated = { ...activeRoom, messages: [...activeRoom.messages, msg] }
+    setChatRooms(prev => prev.map(r => r.id === updated.id ? updated : r))
+    setActiveRoom(updated)
+  }
+
+  if (sub === 'notice') return (
+    <NoticeScreen onBack={() => setSub(null)} onJoin={handleJoin} />
+  )
+
+  if (sub === 'chatroom' && activeRoom) return (
+    <ChatRoomView
+      room={activeRoom}
+      onBack={() => { setSub(null); setTab('채팅방') }}
+      onSend={handleSend}
+    />
+  )
 
   return (
     <div className="main-wrap">
       <div className="main-content">
         {tab === '과팅'  && <GatingTab onNotice={() => setSub('notice')} />}
-        {tab === '채팅방' && <PlaceholderTab title="채팅방" />}
+        {tab === '채팅방' && <ChatList rooms={chatRooms} onOpenRoom={handleOpenRoom} />}
         {tab === '설정'  && (
           <SettingsTab
             onLogout={onLogout}
@@ -94,15 +138,6 @@ function GatingTab({ onNotice }: { onNotice: () => void }) {
           <span className="card-arrow">›</span>
         </button>
       </div>
-    </div>
-  )
-}
-
-function PlaceholderTab({ title }: { title: string }) {
-  return (
-    <div className="placeholder-tab">
-      <p className="placeholder-text">{title}</p>
-      <p className="placeholder-sub">준비 중이에요</p>
     </div>
   )
 }
