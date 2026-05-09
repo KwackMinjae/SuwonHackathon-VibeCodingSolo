@@ -20,7 +20,7 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
   return (
     <div className="main-wrap">
       <div className="main-content">
-        {tab === '과팅'  && <GatingTab />}
+        {tab === '과팅'  && <GatingTab onNotice={() => setSub('notice')} />}
         {tab === '채팅방' && <PlaceholderTab title="채팅방" />}
         {tab === '설정'  && (
           <SettingsTab
@@ -69,7 +69,7 @@ function navIcon(tab: Tab) {
   )
 }
 
-function GatingTab() {
+function GatingTab({ onNotice }: { onNotice: () => void }) {
   return (
     <div className="gating-tab">
       <div className="gating-header">
@@ -77,7 +77,7 @@ function GatingTab() {
         <p className="gating-subtitle">설레는 과팅을 시작해보세요 💙</p>
       </div>
       <div className="gating-cards">
-        <button className="gating-card card-notice" onClick={() => setSub('notice')}>
+        <button className="gating-card card-notice" onClick={onNotice}>
           <div className="card-icon">📋</div>
           <div className="card-text">
             <span className="card-title">공고모집</span>
