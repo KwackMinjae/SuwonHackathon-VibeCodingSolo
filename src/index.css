@@ -1725,3 +1725,232 @@ body {
   0%, 100% { transform: scale(1);   opacity: 0.5; }
   50%       { transform: scale(1.4); opacity: 1;   }
 }
+
+/* ══════════════════════════════════════
+   다크모드
+   ══════════════════════════════════════ */
+
+/* 토글 스위치 */
+.toggle-switch {
+  width: 44px;
+  height: 26px;
+  background: #ddd;
+  border-radius: 13px;
+  position: relative;
+  transition: background 0.25s;
+  flex-shrink: 0;
+}
+.toggle-switch.on { background: linear-gradient(135deg, #87CEEB, #1a8fa0); }
+.toggle-knob {
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  transition: transform 0.25s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+.toggle-switch.on .toggle-knob { transform: translateX(18px); }
+
+/* ── 기본 프레임 & 배경 ── */
+.dark { background: linear-gradient(160deg, #0d1117 0%, #161b22 100%) !important; }
+.dark body { background: #0d1117; }
+
+/* ── 앱 셸 (로그인/회원가입 화면) ── */
+.dark .app-shell { background: transparent; }
+.dark .login-title { color: #87CEEB; }
+.dark .login-wrap { color: #e6edf3; }
+.dark .pw-input {
+  background: #1c2333;
+  border-color: #30363d;
+  color: #e6edf3;
+}
+.dark .pw-input::placeholder { color: #556070; }
+.dark .pw-input:focus { border-color: #87CEEB; }
+.dark .email-row {
+  border-color: #30363d;
+  background: #1c2333;
+}
+.dark .email-input { background: #1c2333; color: #e6edf3; }
+.dark .email-input::placeholder { color: #556070; }
+.dark .email-domain { background: #243044; color: #87CEEB; border-color: #30363d; }
+.dark .dept-select, .dark .type-select {
+  background: #1c2333;
+  border-color: #30363d;
+  color: #e6edf3;
+}
+.dark .student-id-box { background: #243044; border-color: #30363d; color: #87CEEB; }
+.dark .input-group label { color: #8b949e; }
+.dark .step-desc { color: #8b949e; }
+.dark .btn-back { color: #87CEEB; }
+.dark .btn-forgot { color: #87CEEB; }
+.dark .btn-signup {
+  background: #1c2333;
+  border-color: #87CEEB;
+  color: #87CEEB;
+}
+.dark .btn-signup:hover { background: #243044; }
+.dark .divider { border-color: #30363d; }
+
+/* ── 메인 ── */
+.dark .main-wrap { background: transparent; }
+.dark .main-topbar { border-bottom: 1px solid #21262d; }
+.dark .main-topbar-title { color: #87CEEB; }
+.dark .btn-bell { color: #556070; }
+.dark .btn-bell:hover, .dark .btn-bell.active { color: #87CEEB; background: #1c2333; }
+.dark .main-content { background: transparent; }
+.dark .bottom-nav { background: #0d1117; border-color: #21262d; }
+.dark .nav-item { color: #556070; }
+.dark .nav-item.active { color: #87CEEB; }
+
+/* ── 과팅 탭 ── */
+.dark .gating-subtitle { color: #556070; }
+.dark .gating-card { box-shadow: none; }
+.dark .card-notice { background: linear-gradient(135deg, #1a2a3a, #0d1e2e); }
+.dark .card-random { background: linear-gradient(135deg, #2a1a2a, #1e0d1e); }
+.dark .card-title { color: #e6edf3; }
+.dark .card-desc { color: #556070; }
+.dark .card-arrow { color: #30363d; }
+
+/* ── 공고 ── */
+.dark .notice-wrap { background: transparent; }
+.dark .notice-title { color: #87CEEB; }
+.dark .btn-write { color: #87CEEB; }
+.dark .notice-card {
+  background: #161b22;
+  border-color: #21262d;
+}
+.dark .notice-card:hover { background: #1c2333; }
+.dark .notice-card.closed { opacity: 0.4; }
+.dark .notice-card-title { color: #e6edf3; }
+.dark .notice-card-preview { color: #556070; }
+.dark .notice-card-date { color: #30363d; }
+.dark .notice-applicants { color: #87CEEB; }
+.dark .notice-detail-title { color: #e6edf3; }
+.dark .notice-detail-content { color: #8b949e; }
+.dark .notice-detail-divider { border-color: #21262d; }
+.dark .notice-empty { color: #30363d; }
+.dark .notice-textarea {
+  background: #1c2333;
+  border-color: #30363d;
+  color: #e6edf3;
+}
+.dark .notice-textarea::placeholder { color: #556070; }
+.dark .notice-closed-msg { background: #1c2333; color: #556070; }
+
+/* ── 채팅 목록 ── */
+.dark .chat-list-title { color: #87CEEB; }
+.dark .chat-empty { color: #30363d; }
+.dark .chat-room-item {
+  background: #161b22;
+  border-color: #21262d;
+}
+.dark .chat-room-item:hover { background: #1c2333; }
+.dark .chat-room-name { color: #e6edf3; }
+.dark .chat-room-last { color: #556070; }
+.dark .chat-room-arrow { color: #30363d; }
+
+/* ── 채팅방 뷰 ── */
+.dark .chat-room-wrap { background: #0d1117; }
+.dark .chat-room-header { background: #161b22; border-color: #21262d; }
+.dark .chat-room-title { color: #87CEEB; }
+.dark .chat-messages { background: #0d1117; }
+.dark .bubble-theirs { background: #1c2333; color: #e6edf3; box-shadow: none; }
+.dark .chat-sender-name { color: #556070; }
+.dark .chat-time { color: #30363d; }
+.dark .chat-input-bar { background: #161b22; border-color: #21262d; }
+.dark .chat-input {
+  background: #1c2333;
+  border-color: #30363d;
+  color: #e6edf3;
+}
+.dark .chat-input::placeholder { color: #556070; }
+.dark .chat-input:focus { border-color: #87CEEB; }
+.dark .btn-plus { background: #1c2333; border-color: #30363d; color: #87CEEB; }
+.dark .btn-plus:hover { background: #243044; }
+
+/* ── 헤더 버튼 (약속/인증) ── */
+.dark .btn-appt-header { background: #1c2333; border-color: #87CEEB; color: #87CEEB; }
+.dark .btn-appt-header:hover { background: #243044; }
+.dark .btn-verified-header { color: #87CEEB; }
+
+/* ── 약속 카드 ── */
+.dark .appt-card { background: #1c2333; border-color: #30363d; }
+.dark .appt-card-title { color: #87CEEB; }
+.dark .appt-card-row { color: #8b949e; }
+.dark .btn-map-small { background: #243044; border-color: #87CEEB; color: #87CEEB; }
+.dark .appt-accepted { color: #87CEEB; }
+
+/* ── 모달 ── */
+.dark .modal-overlay { background: rgba(0,0,0,0.65); }
+.dark .modal-box { background: #161b22; }
+.dark .modal-title { color: #e6edf3; }
+.dark .modal-close { color: #556070; }
+.dark .btn-map-icon { background: #1c2333; border-color: #30363d; }
+.dark .btn-map-icon:hover { background: #243044; }
+.dark .verify-info-box { background: #1c2333; }
+.dark .verify-info-label { color: #556070; }
+.dark .verify-info-value { color: #e6edf3; }
+.dark .verify-status { color: #8b949e; }
+.dark .verify-status.ok { color: #87CEEB; }
+.dark .verify-done { color: #87CEEB; }
+.dark .invite-user-card { background: #1c2333; border-color: #30363d; }
+.dark .invite-user-name { color: #e6edf3; }
+.dark .invite-user-detail { color: #556070; }
+
+/* ── 알림 ── */
+.dark .notif-panel { border-color: #21262d; }
+.dark .notif-card { background: #161b22; border-color: #2a3a1a; }
+.dark .notif-card:hover { background: #1c2333; }
+.dark .notif-text { color: #8b949e; }
+.dark .notif-text strong { color: #87CEEB; }
+.dark .notif-chevron { color: #30363d; }
+.dark .notif-detail { border-color: #21262d; }
+.dark .notif-room-name { color: #556070; }
+.dark .notif-empty { color: #30363d; }
+.dark .btn-notif-decline { background: #1c2333; color: #556070; }
+.dark .btn-notif-decline:hover { background: #243044; }
+
+/* ── 랜덤매칭 ── */
+.dark .random-wrap { background: transparent; }
+.dark .random-title { color: #87CEEB; }
+.dark .random-section-title { color: #e6edf3; }
+.dark .random-section-desc { color: #556070; }
+.dark .btn-size { background: #161b22; border-color: #21262d; }
+.dark .btn-size.selected { background: #1c2a3a; border-color: #87CEEB; }
+.dark .size-label { color: #8b949e; }
+.dark .btn-size.selected .size-label { color: #87CEEB; }
+.dark .size-sub { color: #30363d; }
+.dark .btn-size.selected .size-sub { color: #556070; }
+.dark .btn-filter-toggle { background: #161b22; border-color: #21262d; }
+.dark .btn-filter-toggle.on { background: #1c2a3a; border-color: #87CEEB; }
+.dark .filter-label { color: #e6edf3; }
+.dark .filter-desc { color: #556070; }
+.dark .filter-badge.off { background: #1c2333; color: #556070; }
+.dark .match-searching-text { color: #87CEEB; }
+.dark .match-searching-sub { color: #556070; }
+.dark .match-success-title { color: #87CEEB; }
+.dark .match-success-desc { color: #556070; }
+.dark .match-user-chip { background: #1c2333; border-color: #30363d; }
+.dark .match-chip-nickname { color: #e6edf3; }
+.dark .match-chip-info { color: #556070; }
+.dark .match-fail-msg { background: #2a1a1a; border-color: #3a2020; }
+
+/* ── 설정 ── */
+.dark .settings-title { color: #87CEEB; }
+.dark .settings-item {
+  background: #161b22;
+  border-color: #21262d;
+}
+.dark .settings-item:hover { background: #1c2333; }
+.dark .settings-item-label { color: #e6edf3; }
+.dark .settings-item-arrow { color: #30363d; }
+.dark .settings-item.danger { border-color: #3a1a1a; }
+.dark .settings-item.danger:hover { background: #2a1a1a; }
+.dark .settings-item.danger .settings-item-label { color: #e74c3c; }
+
+/* ── 스플래시 ── */
+.dark .splash-title { color: #87CEEB; }
+.dark .splash-waves span { background: #87CEEB; }

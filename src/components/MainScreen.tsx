@@ -20,6 +20,8 @@ interface Props {
   onAccountDeleted: () => void
   onPasswordReset: () => void
   currentUser: UserProfile
+  darkMode: boolean
+  onToggleDarkMode: () => void
 }
 
 function nowTime() {
@@ -27,7 +29,7 @@ function nowTime() {
   return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset, currentUser }: Props) {
+export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset, currentUser, darkMode, onToggleDarkMode }: Props) {
   const [tab, setTab] = useState<Tab>('과팅')
   const [sub, setSub] = useState<SubScreen>(null)
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([])
@@ -232,6 +234,8 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
             onLogout={onLogout}
             onAccountDeleted={onAccountDeleted}
             onPasswordReset={onPasswordReset}
+            darkMode={darkMode}
+            onToggleDarkMode={onToggleDarkMode}
           />
         )}
       </div>

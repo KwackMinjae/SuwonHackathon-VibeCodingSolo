@@ -18,6 +18,7 @@ const DEFAULT_USER: UserProfile = {
 export default function App() {
   const [screen, setScreen] = useState<Screen>('splash')
   const [currentUser, setCurrentUser] = useState<UserProfile>(DEFAULT_USER)
+  const [darkMode, setDarkMode] = useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => setScreen('login'), 2000)
@@ -30,7 +31,7 @@ export default function App() {
   }
 
   return (
-    <div className="phone-frame">
+    <div className={`phone-frame${darkMode ? ' dark' : ''}`}>
       {screen === 'splash' && <SplashScreen />}
       {screen === 'main' && (
         <MainScreen
@@ -38,6 +39,8 @@ export default function App() {
           onAccountDeleted={() => setScreen('login')}
           onPasswordReset={() => setScreen('login')}
           currentUser={currentUser}
+          darkMode={darkMode}
+          onToggleDarkMode={() => setDarkMode(p => !p)}
         />
       )}
       {screen !== 'splash' && screen !== 'main' && (

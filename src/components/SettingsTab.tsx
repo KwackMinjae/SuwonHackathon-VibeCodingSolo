@@ -6,13 +6,15 @@ interface Props {
   onLogout: () => void
   onAccountDeleted: () => void
   onPasswordReset: () => void
+  darkMode: boolean
+  onToggleDarkMode: () => void
 }
 
 function generateCode() {
   return String(Math.floor(100000 + Math.random() * 900000))
 }
 
-export default function SettingsTab({ onLogout, onAccountDeleted, onPasswordReset }: Props) {
+export default function SettingsTab({ onLogout, onAccountDeleted, onPasswordReset, darkMode, onToggleDarkMode }: Props) {
   const [view, setView] = useState<View>('main')
 
   // 프로필
@@ -79,6 +81,16 @@ export default function SettingsTab({ onLogout, onAccountDeleted, onPasswordRese
           <span className="settings-item-label">프로필 수정</span>
           <span className="settings-item-arrow">›</span>
         </button>
+
+        {/* 다크모드 토글 */}
+        <div className="settings-item" onClick={onToggleDarkMode} style={{ cursor: 'pointer' }}>
+          <span className="settings-item-icon">{darkMode ? '🌙' : '☀️'}</span>
+          <span className="settings-item-label">다크모드</span>
+          <div className={`toggle-switch ${darkMode ? 'on' : ''}`}>
+            <div className="toggle-knob" />
+          </div>
+        </div>
+
         <button className="settings-item" onClick={onLogout}>
           <span className="settings-item-icon">🚪</span>
           <span className="settings-item-label">로그아웃</span>
