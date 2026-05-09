@@ -2,9 +2,10 @@ import { useState } from 'react'
 
 interface Props {
   onSignup: () => void
+  onForgot: () => void
 }
 
-export default function LoginScreen({ onSignup }: Props) {
+export default function LoginScreen({ onSignup, onForgot }: Props) {
   const [emailId, setEmailId] = useState('')
   const [password, setPassword] = useState('')
   const [pwError, setPwError] = useState('')
@@ -50,7 +51,7 @@ export default function LoginScreen({ onSignup }: Props) {
 
       <button className="btn-login" onClick={handleLogin}>로그인</button>
 
-      <button className="btn-forgot">비밀번호를 잊으셨나요?</button>
+      <button className="btn-forgot" onClick={onForgot}>비밀번호를 잊으셨나요?</button>
 
       <div className="divider" />
 
