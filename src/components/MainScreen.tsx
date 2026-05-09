@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import SettingsTab from './SettingsTab'
+import NoticeScreen from './NoticeScreen'
 
 type Tab = '과팅' | '채팅방' | '설정'
+type SubScreen = null | 'notice' | 'random'
 
 interface Props {
   onLogout: () => void
@@ -11,6 +13,9 @@ interface Props {
 
 export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset }: Props) {
   const [tab, setTab] = useState<Tab>('과팅')
+  const [sub, setSub] = useState<SubScreen>(null)
+
+  if (sub === 'notice') return <NoticeScreen onBack={() => setSub(null)} />
 
   return (
     <div className="main-wrap">
@@ -72,7 +77,7 @@ function GatingTab() {
         <p className="gating-subtitle">설레는 과팅을 시작해보세요 💙</p>
       </div>
       <div className="gating-cards">
-        <button className="gating-card card-notice">
+        <button className="gating-card card-notice" onClick={() => setSub('notice')}>
           <div className="card-icon">📋</div>
           <div className="card-text">
             <span className="card-title">공고모집</span>
