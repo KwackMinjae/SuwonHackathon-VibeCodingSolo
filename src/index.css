@@ -87,3 +87,151 @@ body {
   0%, 100% { transform: scale(1);   opacity: 0.5; }
   50%       { transform: scale(1.4); opacity: 1;   }
 }
+
+/* ── App Shell ── */
+.app-shell {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px 16px;
+}
+
+/* ── Login ── */
+.login-wrap {
+  background: #fff;
+  border-radius: 20px;
+  padding: 40px 32px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 8px 32px rgba(33, 150, 166, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: fadeIn 0.5s ease both;
+}
+
+.login-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #1a8fa0;
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.input-group label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #555;
+}
+
+.email-row {
+  display: flex;
+  align-items: center;
+  border: 1.5px solid #d0eaf0;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.email-row:focus-within {
+  border-color: #87CEEB;
+}
+
+.email-input {
+  flex: 1;
+  padding: 12px 14px;
+  border: none;
+  outline: none;
+  font-size: 0.95rem;
+  background: transparent;
+}
+
+.email-domain {
+  padding: 12px 14px;
+  background: #f0f8ff;
+  color: #1a8fa0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  border-left: 1.5px solid #d0eaf0;
+}
+
+.pw-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid #d0eaf0;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.pw-input:focus {
+  border-color: #87CEEB;
+}
+
+.pw-input.error {
+  border-color: #e74c3c;
+}
+
+.error-msg {
+  font-size: 0.8rem;
+  color: #e74c3c;
+}
+
+.btn-login {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #87CEEB, #1a8fa0);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-login:hover {
+  opacity: 0.88;
+}
+
+.btn-forgot {
+  background: none;
+  border: none;
+  color: #87CEEB;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: underline;
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid #e8f4f8;
+}
+
+.btn-signup {
+  width: 100%;
+  padding: 13px;
+  background: #fff;
+  color: #1a8fa0;
+  border: 2px solid #87CEEB;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.btn-signup:hover {
+  background: #f0f8ff;
+}
