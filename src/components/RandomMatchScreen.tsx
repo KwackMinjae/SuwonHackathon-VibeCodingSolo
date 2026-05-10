@@ -15,6 +15,14 @@ export interface MockUser {
   dept: string
 }
 
+export interface AvailableRoom {
+  id: number
+  title: string
+  capacity: number
+  memberCount: number
+  code: string
+}
+
 export const MOCK_USERS: MockUser[] = [
   { nickname: '봄바람', studentId: '22031045', gender: '여', dept: '경영학부' },
   { nickname: '하늘이', studentId: '23010892', gender: '여', dept: '간호학과' },
@@ -51,15 +59,19 @@ interface Props {
   onBack: () => void
   currentUser: UserProfile
   onMatchSuccess: (matchedUsers: MockUser[], size: number) => void
+  onRoomCreated?: (room: AvailableRoom) => void
+  publicRooms?: AvailableRoom[]
+  onJoinPublicRoom?: (room: AvailableRoom) => void
   initialView?: View
 }
 
-export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess, initialView = 'select' }: Props) {
+export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess, onRoomCreated, publicRooms, onJoinPublicRoom, initialView = 'select' }: Props) {
   const [view, setView]           = useState<View>(initialView)
   const [matchSize, setMatchSize] = useState(3)
   const [teamGender, setTeamGender] = useState<TeamGender>(currentUser.gender)
   const [roomCode, setRoomCode]   = useState('')
-  const [members, setMembers]     = useState(1)   // 실제 방 인원 (나 포함)
+  const [roomId, setRoomId]       = useState(0)
+  const [members, setMembers]     = useState(1)
   const [joinCode, setJoinCode]   = useState('')
   const [joinError, setJoinError] = useState('')
   const [countdown, setCountdown] = useState<number | null>(null)
@@ -69,9 +81,19 @@ export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess,
 
   // ── 방 만들기 ──
   const createRoom = () => {
-    setRoomCode(makeCode())
+    const newCode = makeCode()
+    const newId = Date.now()
+    setRoomCode(newCode)
+    setRoomId(newId)
     setMembers(1)
     setView('host-wait')
+    onRoomCreated?.({
+      id: newId,
+      title: `${matchSize}v${matchSize} 과팅`,
+      capacity: matchSize,
+      memberCount: 1,
+      code: newCode,
+    })
   }
 
   // ── 방 참여하기 ──
@@ -242,28 +264,51 @@ export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess,
   )
 
   // ── 방 참여: 코드 입력 ──
-  if (view === 'join-input') return (
-    <div className="match-wrap">
-      <button className="btn-back" onClick={() => setView('select')}>← 뒤로</button>
-      <h2 className="match-title">방 참여하기</h2>
-      <p className="step-desc">방장에게 받은 6자리 초대 코드를 입력해주세요.</p>
-      <div className="input-group">
-        <label>초대 코드</label>
-        <input
-          type="text"
-          placeholder="6자리 코드 입력"
-          value={joinCode}
-          onChange={e => { setJoinCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setJoinError('') }}
-          className={`pw-input ${joinError ? 'error' : ''}`}
-          maxLength={6}
-        />
-        {joinError && <p className="error-msg">{joinError}</p>}
+  if (view === 'join-input') {
+    const openRooms = (publicRooms ?? []).filter(r => r.memberCount < r.capacity)
+    return (
+      <div className="match-wrap">
+        <button className="btn-back" onClick={onBack}>← 뒤로</button>
+        <h2 className="match-title">방 참여하기</h2>
+
+        {openRooms.length > 0 && (
+          <>
+            <p className="step-desc">참여 가능한 방 목록</p>
+            <div className="available-rooms">
+              {openRooms.map(room => (
+                <button key={room.id} className="available-room-card" onClick={() => onJoinPublicRoom?.(room)}>
+                  <div className="available-room-info">
+                    <span className="available-room-title">{room.title}</span>
+                    <span className="available-room-count">{room.memberCount}/{room.capacity}명</span>
+                  </div>
+                  <span className="available-room-code">#{room.code}</span>
+                  <span className="available-room-join">참여</span>
+                </button>
+              ))}
+            </div>
+            <div className="available-rooms-divider">또는 코드로 직접 입장</div>
+          </>
+        )}
+
+        <p className="step-desc">방장에게 받은 6자리 초대 코드를 입력해주세요.</p>
+        <div className="input-group">
+          <label>초대 코드</label>
+          <input
+            type="text"
+            placeholder="6자리 코드 입력"
+            value={joinCode}
+            onChange={e => { setJoinCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setJoinError('') }}
+            className={`pw-input ${joinError ? 'error' : ''}`}
+            maxLength={6}
+          />
+          {joinError && <p className="error-msg">{joinError}</p>}
+        </div>
+        <button className="btn-login" onClick={joinRoom} disabled={joinCode.length !== 6}>
+          입장하기
+        </button>
       </div>
-      <button className="btn-login" onClick={joinRoom} disabled={joinCode.length !== 6}>
-        입장하기
-      </button>
-    </div>
-  )
+    )
+  }
 
   // ── 즉시 랜덤매칭 설정 ──
   if (view === 'instant') return (

@@ -2258,3 +2258,221 @@ body {
 /* ── 스플래시 ── */
 .dark .splash-title { color: #87CEEB; }
 .dark .splash-waves span { background: #87CEEB; }
+
+/* ── Plus Menu ── */
+.plus-menu-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 90;
+}
+
+.plus-menu {
+  position: absolute;
+  bottom: 72px;
+  left: 16px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.16);
+  overflow: hidden;
+  z-index: 100;
+  animation: slideUp 0.2s ease both;
+  min-width: 190px;
+}
+
+.plus-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 18px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid #f0f4f8;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #333;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.plus-menu-item:last-child { border-bottom: none; }
+.plus-menu-item:hover { background: #f0f8ff; }
+.plus-menu-item.danger { color: #e74c3c; }
+.plus-menu-item.danger:hover { background: #fff5f5; }
+
+/* ── Rating Modal ── */
+.rating-notice {
+  padding: 10px 14px;
+  background: #f0f8ff;
+  border: 1.5px solid #d0eaf0;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  color: #1a8fa0;
+  font-weight: 600;
+  text-align: center;
+}
+
+.rating-locked {
+  padding: 16px;
+  background: #f9f9f9;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  color: #aaa;
+  text-align: center;
+  line-height: 1.7;
+  white-space: pre-line;
+}
+
+.rating-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f4f8;
+}
+
+.rating-row:last-of-type { border-bottom: none; }
+
+.rating-name {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.star-row {
+  display: flex;
+  gap: 2px;
+}
+
+.star-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #ddd;
+  cursor: pointer;
+  padding: 2px;
+  transition: color 0.15s, transform 0.1s;
+  line-height: 1;
+}
+
+.star-btn:hover { transform: scale(1.2); }
+.star-btn.filled { color: #f5a623; }
+
+/* ── Available Rooms (방 참여하기 목록) ── */
+.available-rooms {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.available-room-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1.5px solid #e8f4f8;
+  border-radius: 14px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.available-room-card:hover { background: #f0f8ff; border-color: #87CEEB; }
+
+.available-room-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.available-room-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.available-room-count {
+  font-size: 0.75rem;
+  color: #888;
+}
+
+.available-room-code {
+  font-size: 0.72rem;
+  color: #aaa;
+  font-family: monospace;
+  letter-spacing: 1px;
+}
+
+.available-room-join {
+  padding: 5px 12px;
+  background: linear-gradient(135deg, #87CEEB, #1a8fa0);
+  color: #fff;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.available-rooms-divider {
+  text-align: center;
+  font-size: 0.78rem;
+  color: #bbb;
+  padding: 2px 0;
+}
+
+/* ── 다크모드: 매치 화면 ── */
+.dark .match-wrap { background: transparent; }
+.dark .match-title { color: #87CEEB; }
+.dark .room-code-box { background: linear-gradient(135deg, #1a2a3a, #0d1e2e); border-color: #87CEEB; }
+.dark .room-code { color: #87CEEB; }
+.dark .room-code-hint { color: #556070; }
+.dark .room-code-label { color: #556070; }
+.dark .team-status-box { background: #161b22; border-color: #21262d; }
+.dark .team-status-box.other-team { background: #1a1520; border-color: #2d1f2a; }
+.dark .team-status-title { color: #8b949e; }
+.dark .member-dot { background: #1c2333; border-color: #30363d; color: #556070; }
+.dark .member-dot.filled { background: #1a8fa0; border-color: #1a8fa0; color: #fff; }
+.dark .member-dot.auto { background: #161b22; border-color: #30363d; color: #30363d; }
+.dark .member-count { color: #87CEEB; }
+.dark .match-notice { color: #556070; }
+.dark .match-size-btn { background: #161b22; border-color: #21262d; color: #556070; }
+.dark .match-size-btn.selected { background: #1c2a3a; border-color: #87CEEB; color: #87CEEB; }
+.dark .match-select-card { box-shadow: none; }
+.dark .card-create { background: linear-gradient(135deg, #1a2a3a, #0d1e2e); }
+.dark .card-join { background: linear-gradient(135deg, #2a1a2a, #1e0d1e); }
+.dark .match-card-label { color: #e6edf3; }
+.dark .match-card-sub { color: #556070; }
+.dark .result-team-box { background: transparent; }
+.dark .my-team-box { background: #1c2333; border-color: #30363d; }
+.dark .other-team-box { background: #2a1a20; border-color: #3a1a30; }
+.dark .result-team-label { color: #556070; }
+.dark .result-nickname { color: #e6edf3; }
+.dark .result-info { color: #556070; }
+.dark .result-vs { color: #30363d; }
+
+/* ── 다크모드: Plus Menu ── */
+.dark .plus-menu { background: #161b22; box-shadow: 0 4px 24px rgba(0,0,0,0.5); }
+.dark .plus-menu-item { color: #e6edf3; border-color: #21262d; }
+.dark .plus-menu-item:hover { background: #1c2333; }
+.dark .plus-menu-item.danger { color: #e74c3c; }
+.dark .plus-menu-item.danger:hover { background: #2a1a1a; }
+
+/* ── 다크모드: Rating Modal ── */
+.dark .rating-notice { background: #1c2333; border-color: #30363d; color: #87CEEB; }
+.dark .rating-locked { background: #1c2333; color: #556070; }
+.dark .rating-row { border-color: #21262d; }
+.dark .rating-name { color: #e6edf3; }
+.dark .star-btn { color: #30363d; }
+.dark .star-btn.filled { color: #f5a623; }
+
+/* ── 다크모드: Available Rooms ── */
+.dark .available-room-card { background: #161b22; border-color: #21262d; }
+.dark .available-room-card:hover { background: #1c2333; border-color: #87CEEB; }
+.dark .available-room-title { color: #e6edf3; }
+.dark .available-room-count { color: #556070; }
+.dark .available-room-code { color: #30363d; }
+.dark .available-rooms-divider { color: #30363d; }
