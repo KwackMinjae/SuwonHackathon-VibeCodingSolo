@@ -284,7 +284,7 @@ export function ChatList({ rooms, onOpenRoom }: { rooms: ChatRoom[]; onOpenRoom:
     <div className="chat-list-wrap">
       <h2 className="chat-list-title">채팅방</h2>
       {rooms.length === 0 ? (
-        <div className="chat-empty">참여한 채팅방이 없어요.<br />과팅 탭에서 매칭을 시작해보세요!</div>
+        <div className="chat-empty">참여한 채팅방이 없어요.<br />채팅방을 만들거나 참여해보세요!</div>
       ) : (
         <div className="chat-rooms">
           {rooms.map(room => {
