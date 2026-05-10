@@ -38,7 +38,7 @@ function randomPick(pool: MockUser[], count: number): MockUser[] {
   return [...pool].sort(() => Math.random() - 0.5).slice(0, count)
 }
 
-type View = 'select' | 'host-setup' | 'host-wait' | 'join-input' | 'join-wait' | 'result'
+type View = 'select' | 'host-setup' | 'host-wait' | 'join-input' | 'join-wait' | 'instant' | 'instant-searching' | 'result'
 type TeamGender = '남' | '여'
 
 interface MatchResult {
@@ -262,6 +262,71 @@ export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess,
       <button className="btn-login" onClick={joinRoom} disabled={joinCode.length !== 6}>
         입장하기
       </button>
+    </div>
+  )
+
+  // ── 즉시 랜덤매칭 설정 ──
+  if (view === 'instant') return (
+    <div className="match-wrap">
+      <button className="btn-back" onClick={onBack}>← 뒤로</button>
+      <h2 className="match-title">랜덤매칭</h2>
+      <p className="step-desc">인원과 우리 팀 성별을 설정하면 바로 매칭해드려요!</p>
+
+      <div className="input-group">
+        <label>미팅 인원</label>
+        <div className="match-size-row">
+          {[1, 2, 3, 4, 5].map(n => (
+            <button key={n}
+              className={`match-size-btn ${matchSize === n ? 'selected' : ''}`}
+              onClick={() => setMatchSize(n)}>
+              {n}v{n}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="input-group">
+        <label>우리 팀 성별</label>
+        <div className="gender-row">
+          {(['남', '여'] as TeamGender[]).map(g => (
+            <button key={g}
+              className={`btn-gender ${teamGender === g ? 'selected' : ''}`}
+              onClick={() => setTeamGender(g)}>
+              {g}자팀
+            </button>
+          ))}
+        </div>
+        <p className="step-desc" style={{ marginTop: 8 }}>
+          {teamGender}자 {matchSize}명 vs {otherGender}자 {matchSize}명 매칭
+        </p>
+      </div>
+
+      <button className="btn-login" onClick={() => {
+        setView('instant-searching')
+        setTimeout(() => {
+          const myPool    = MOCK_USERS.filter(u => u.gender === teamGender)
+          const otherPool = MOCK_USERS.filter(u => u.gender === otherGender)
+          const myTeam: MockUser[] = [
+            { nickname: currentUser.nickname, studentId: currentUser.studentId, gender: currentUser.gender, dept: currentUser.dept },
+            ...randomPick(myPool, matchSize - 1),
+          ]
+          const otherTeam = randomPick(otherPool, matchSize)
+          setResult({ myTeam, otherTeam, size: matchSize })
+          setView('result')
+          onMatchSuccess([...myTeam, ...otherTeam], matchSize)
+        }, 2000)
+      }}>
+        매칭 시작하기 💘
+      </button>
+    </div>
+  )
+
+  // ── 즉시 매칭 중 ──
+  if (view === 'instant-searching') return (
+    <div className="match-wrap" style={{ alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ fontSize: '3.5rem', animation: 'heartSpin 1s linear infinite' }}>💘</div>
+      <h2 className="match-title" style={{ textAlign: 'center' }}>매칭 중...</h2>
+      <p className="step-desc" style={{ textAlign: 'center' }}>잠시만 기다려주세요</p>
     </div>
   )
 

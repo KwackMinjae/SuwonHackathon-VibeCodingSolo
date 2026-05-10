@@ -446,6 +446,11 @@ body {
   box-shadow: 0 4px 16px rgba(255, 105, 180, 0.12);
 }
 
+.card-instant {
+  background: linear-gradient(135deg, #f0fff4, #c8f5d8);
+  box-shadow: 0 4px 16px rgba(34, 197, 94, 0.12);
+}
+
 .card-icon {
   font-size: 2.2rem;
   flex-shrink: 0;
