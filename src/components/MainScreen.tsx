@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import SettingsTab from './SettingsTab'
-import NoticeScreen from './NoticeScreen'
 import { ChatList, ChatRoomView, ChatRoom, ChatMessage } from './ChatScreen'
 import RandomMatchScreen, { UserProfile, MockUser } from './RandomMatchScreen'
 
 type Tab = '과팅' | '채팅방' | '설정'
-type SubScreen = null | 'notice' | 'random' | 'chatroom'
+type SubScreen = null | 'random' | 'chatroom'
 
 interface ChatNotification {
   id: number
@@ -38,20 +37,7 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
   const [expandedNotif, setExpandedNotif] = useState<number | null>(null)
   const [showNotifPanel, setShowNotifPanel] = useState(false)
 
-  const handleJoin = (title: string) => {
-    const welcome: ChatMessage = {
-      id: Date.now(),
-      text: '채팅방에 참여했어요! 인사를 건네보세요 👋',
-      isMine: false,
-      time: nowTime(),
-    }
-    const newRoom: ChatRoom = { id: Date.now() + 1, title, messages: [welcome] }
-    setChatRooms(prev => [...prev, newRoom])
-    setSub(null)
-    setTab('채팅방')
-  }
-
-  const handleMatchSuccess = (matchedUsers: MockUser[], size: number) => {
+const handleMatchSuccess = (matchedUsers: MockUser[], size: number) => {
     const t = nowTime()
     const systemMsg: ChatMessage = {
       id: Date.now(),
@@ -151,10 +137,6 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
     setExpandedNotif(null)
   }
 
-  if (sub === 'notice') return (
-    <NoticeScreen onBack={() => setSub(null)} onJoin={handleJoin} />
-  )
-
   if (sub === 'random') return (
     <RandomMatchScreen
       onBack={() => setSub(null)}
@@ -227,7 +209,7 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
       )}
 
       <div className="main-content">
-        {tab === '과팅'  && <GatingTab onNotice={() => setSub('notice')} onRandom={() => setSub('random')} />}
+        {tab === '과팅'  && <GatingTab onRandom={() => setSub('random')} />}
         {tab === '채팅방' && <ChatList rooms={chatRooms} onOpenRoom={handleOpenRoom} />}
         {tab === '설정'  && (
           <SettingsTab
@@ -278,26 +260,18 @@ function navIcon(tab: Tab) {
   )
 }
 
-function GatingTab({ onNotice, onRandom }: { onNotice: () => void; onRandom: () => void }) {
+function GatingTab({ onRandom }: { onRandom: () => void }) {
   return (
     <div className="gating-tab">
       <div className="gating-header">
         <p className="gating-subtitle">설레는 과팅을 시작해보세요 💙</p>
       </div>
       <div className="gating-cards">
-        <button className="gating-card card-notice" onClick={onNotice}>
-          <div className="card-icon">📋</div>
-          <div className="card-text">
-            <span className="card-title">공고모집</span>
-            <span className="card-desc">과팅 공고를 올리거나<br />참여 신청을 해보세요</span>
-          </div>
-          <span className="card-arrow">›</span>
-        </button>
         <button className="gating-card card-random" onClick={onRandom}>
           <div className="card-icon">🎲</div>
           <div className="card-text">
             <span className="card-title">랜덤매칭</span>
-            <span className="card-desc">조건에 맞는 상대를<br />랜덤으로 매칭해드려요</span>
+            <span className="card-desc">방을 만들거나 입장해서<br />과팅 상대를 만나보세요</span>
           </div>
           <span className="card-arrow">›</span>
         </button>
