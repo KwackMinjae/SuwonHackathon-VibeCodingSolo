@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export interface UserProfile {
   nickname: string
@@ -7,172 +7,240 @@ export interface UserProfile {
   dept: string
 }
 
-export interface MockUser extends UserProfile {
-  id: number
+export interface MockUser {
+  id?: number
+  nickname: string
+  studentId: string
+  gender: '남' | '여'
+  dept: string
 }
 
 export const MOCK_USERS: MockUser[] = [
-  { id: 1,  nickname: '민지',  studentId: '20230101', gender: '여', dept: '경영학부' },
-  { id: 2,  nickname: '수아',  studentId: '20220202', gender: '여', dept: '인문학부' },
-  { id: 3,  nickname: '하린',  studentId: '20230303', gender: '여', dept: '컴퓨터학부' },
-  { id: 4,  nickname: '예은',  studentId: '20220404', gender: '여', dept: '아동가족복지학과' },
-  { id: 5,  nickname: '지유',  studentId: '20230505', gender: '여', dept: '간호학과' },
-  { id: 6,  nickname: '나연',  studentId: '20220606', gender: '여', dept: '식품영양학과' },
-  { id: 7,  nickname: '다인',  studentId: '20231707', gender: '여', dept: '외국어학부' },
-  { id: 8,  nickname: '준혁',  studentId: '20230708', gender: '남', dept: '산업 및 기계공학부' },
-  { id: 9,  nickname: '태양',  studentId: '20220809', gender: '남', dept: '경영학부' },
-  { id: 10, nickname: '도현',  studentId: '20230910', gender: '남', dept: '전기전자공학부' },
-  { id: 11, nickname: '시윤',  studentId: '20221011', gender: '남', dept: '컴퓨터학부' },
-  { id: 12, nickname: '재원',  studentId: '20231112', gender: '남', dept: '데이터과학부' },
-  { id: 13, nickname: '성민',  studentId: '20221213', gender: '남', dept: '법행정학부' },
-  { id: 14, nickname: '현우',  studentId: '20231314', gender: '남', dept: '반도체공학과' },
+  { nickname: '봄바람', studentId: '22031045', gender: '여', dept: '경영학부' },
+  { nickname: '하늘이', studentId: '23010892', gender: '여', dept: '간호학과' },
+  { nickname: '강태양', studentId: '21055231', gender: '남', dept: '컴퓨터학부' },
+  { nickname: '이슬비', studentId: '24012345', gender: '여', dept: '미디어커뮤니케이션학과' },
+  { nickname: '민준혁', studentId: '22078901', gender: '남', dept: '전기전자공학부' },
+  { nickname: '서하린', studentId: '23045678', gender: '여', dept: '호텔관광학부' },
 ]
 
-type MatchSize = 2 | 3 | 4
-type MatchStatus = 'idle' | 'searching' | 'success' | 'fail'
+function makeCode() {
+  return String(Math.floor(100000 + Math.random() * 900000))
+}
+
+type View = 'select' | 'host-setup' | 'host-wait' | 'join-input' | 'join-wait' | 'matched'
 
 interface Props {
   onBack: () => void
   currentUser: UserProfile
-  onMatchSuccess: (matchedUsers: MockUser[], size: MatchSize) => void
+  onMatchSuccess: (matchedUsers: MockUser[], size: number) => void
 }
 
 export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess }: Props) {
-  const [selectedSizes, setSelectedSizes] = useState<Set<MatchSize>>(new Set([3]))
-  const [deptFilter, setDeptFilter] = useState(false)
-  const [status, setStatus] = useState<MatchStatus>('idle')
-  const [matched, setMatched] = useState<MockUser[]>([])
-  const [matchedSize, setMatchedSize] = useState<MatchSize>(3)
+  const [view, setView] = useState<View>('select')
+  const [roomCode, setRoomCode] = useState('')
+  const [matchSize, setMatchSize] = useState(2)
+  const [members, setMembers] = useState(1)
+  const [joinCode, setJoinCode] = useState('')
+  const [joinError, setJoinError] = useState('')
+  const [countdown, setCountdown] = useState<number | null>(null)
+  const [matchedUsers, setMatchedUsers] = useState<MockUser[]>([])
 
-  const toggleSize = (size: MatchSize) => {
-    setSelectedSizes(prev => {
-      const next = new Set(prev)
-      if (next.has(size) && next.size > 1) next.delete(size)
-      else next.add(size)
-      return next
-    })
+  const createRoom = () => {
+    setRoomCode(makeCode())
+    setMembers(1)
+    setView('host-wait')
+  }
+
+  const joinRoom = () => {
+    if (joinCode.length !== 6) { setJoinError('방 번호는 6자리예요.'); return }
+    setJoinError('')
+    setView('join-wait')
+  }
+
+  const addMember = () => {
+    setMembers(prev => Math.min(prev + 1, matchSize))
   }
 
   const startMatch = () => {
-    setStatus('searching')
-
-    setTimeout(() => {
-      const opposite = currentUser.gender === '남' ? '여' : '남'
-      let pool = MOCK_USERS.filter(u => u.gender === opposite)
-      if (deptFilter) pool = pool.filter(u => u.dept !== currentUser.dept)
-
-      // 큰 사이즈부터 시도
-      const sizes = ([...selectedSizes] as MatchSize[]).sort((a, b) => b - a)
-      let found: MockUser[] | null = null
-      let foundSize: MatchSize = 3
-
-      for (const size of sizes) {
-        if (pool.length >= size) {
-          found = [...pool].sort(() => Math.random() - 0.5).slice(0, size)
-          foundSize = size
-          break
-        }
-      }
-
-      if (found) {
-        setMatched(found)
-        setMatchedSize(foundSize)
-        setStatus('success')
-      } else {
-        setStatus('fail')
-      }
-    }, 2500)
+    const picked = [...MOCK_USERS]
+      .sort(() => Math.random() - 0.5)
+      .slice(0, Math.max(matchSize - 1, 1))
+    setMatchedUsers(picked)
+    setCountdown(3)
   }
 
-  // 매칭 성공 화면
-  if (status === 'success') return (
-    <div className="random-wrap">
-      <div className="random-header">
-        <button className="btn-back" onClick={onBack}>← 뒤로</button>
-        <h2 className="random-title">랜덤매칭</h2>
-        <span />
-      </div>
-      <div className="match-success-wrap">
-        <div className="match-success-icon">🎉</div>
-        <h3 className="match-success-title">매칭 성공!</h3>
-        <p className="match-success-desc">{matchedSize}v{matchedSize} 매칭이 완료되었어요</p>
-        <div className="match-users-list">
-          {matched.map(u => (
-            <div key={u.id} className="match-user-chip">
-              <span className="match-chip-nickname">{u.nickname}</span>
-              <span className="match-chip-info">{u.studentId.slice(0, 4)}학번 · {u.dept}</span>
-            </div>
-          ))}
-        </div>
-        <button className="btn-login" onClick={() => onMatchSuccess(matched, matchedSize)}>
-          채팅방 입장하기
+  useEffect(() => {
+    if (countdown === null) return
+    if (countdown === 0) {
+      setView('matched')
+      onMatchSuccess(matchedUsers, matchSize)
+      return
+    }
+    const t = setTimeout(() => setCountdown(c => (c ?? 1) - 1), 1000)
+    return () => clearTimeout(t)
+  }, [countdown])
+
+  // ── 선택 화면 ──
+  if (view === 'select') return (
+    <div className="match-wrap">
+      <button className="btn-back" onClick={onBack}>← 뒤로</button>
+      <h2 className="match-title">랜덤매칭</h2>
+      <p className="step-desc">방을 만들거나 방 번호로 입장하세요.</p>
+
+      <div className="match-select-cards">
+        <button className="match-select-card card-create"
+          onClick={() => { setMatchSize(2); setView('host-setup') }}>
+          <span className="match-card-icon">🏠</span>
+          <span className="match-card-label">방 만들기</span>
+          <span className="match-card-sub">고유 번호로 친구 초대</span>
+        </button>
+        <button className="match-select-card card-join"
+          onClick={() => { setJoinCode(''); setJoinError(''); setView('join-input') }}>
+          <span className="match-card-icon">🚪</span>
+          <span className="match-card-label">방 들어가기</span>
+          <span className="match-card-sub">방 번호 입력 후 입장</span>
         </button>
       </div>
     </div>
   )
 
-  // 메인 설정 화면
-  return (
-    <div className="random-wrap">
-      <div className="random-header">
-        <button className="btn-back" onClick={onBack}>← 뒤로</button>
-        <h2 className="random-title">랜덤매칭</h2>
-        <span />
+  // ── 방 만들기: 인원 설정 ──
+  if (view === 'host-setup') return (
+    <div className="match-wrap">
+      <button className="btn-back" onClick={() => setView('select')}>← 뒤로</button>
+      <h2 className="match-title">방 만들기</h2>
+      <p className="step-desc">매칭할 인원 수를 설정해주세요.</p>
+
+      <div className="input-group">
+        <label>매칭 인원</label>
+        <div className="match-size-row">
+          {[1, 2, 3, 4, 5, 6].map(n => (
+            <button
+              key={n}
+              className={`match-size-btn ${matchSize === n ? 'selected' : ''}`}
+              onClick={() => setMatchSize(n)}
+            >
+              {n}명
+            </button>
+          ))}
+        </div>
+        <p className="step-desc" style={{ marginTop: 8 }}>
+          {matchSize}명이 모이면 매칭을 시작할 수 있어요.
+        </p>
       </div>
 
-      {status === 'searching' ? (
-        <div className="match-searching">
-          <div className="match-heart-spin">💘</div>
-          <p className="match-searching-text">매칭 상대를 찾고 있어요...</p>
-          <p className="match-searching-sub">잠시만 기다려주세요</p>
+      <button className="btn-login" onClick={createRoom}>방 만들기</button>
+    </div>
+  )
+
+  // ── 방장 대기실 ──
+  if (view === 'host-wait') return (
+    <div className="match-wrap">
+      <button className="btn-back" onClick={() => setView('host-setup')}>← 뒤로</button>
+      <h2 className="match-title">대기 중</h2>
+
+      <div className="room-code-box">
+        <p className="room-code-label">방 번호</p>
+        <p className="room-code">{roomCode}</p>
+        <p className="room-code-hint">이 번호를 상대방에게 공유하세요</p>
+      </div>
+
+      <div className="member-status">
+        <div className="member-bar-wrap">
+          <div className="member-bar-fill" style={{ width: `${(members / matchSize) * 100}%` }} />
         </div>
-      ) : (
-        <div className="random-settings">
-          {status === 'fail' && (
-            <div className="match-fail-msg">
-              매칭 가능한 상대가 없어요.<br />필터를 조정해보세요.
-            </div>
-          )}
+        <p className="member-count">{members} / {matchSize}명 입장</p>
+      </div>
 
-          <div className="random-section">
-            <h3 className="random-section-title">매칭 인원</h3>
-            <p className="random-section-desc">중복 선택 가능 · 가장 큰 인원 기준으로 매칭해요</p>
-            <div className="size-btn-row">
-              {([2, 3, 4] as MatchSize[]).map(size => (
-                <button
-                  key={size}
-                  className={`btn-size ${selectedSizes.has(size) ? 'selected' : ''}`}
-                  onClick={() => toggleSize(size)}
-                >
-                  <span className="size-label">{size}v{size}</span>
-                  <span className="size-sub">각 {size}명</span>
-                </button>
-              ))}
-            </div>
-          </div>
+      <div className="member-dots">
+        {Array.from({ length: matchSize }).map((_, i) => (
+          <div key={i} className={`member-dot ${i < members ? 'filled' : ''}`} />
+        ))}
+      </div>
 
-          <div className="random-section">
-            <h3 className="random-section-title">필터</h3>
-            <button
-              className={`btn-filter-toggle ${deptFilter ? 'on' : ''}`}
-              onClick={() => setDeptFilter(p => !p)}
-            >
-              <span className="filter-icon">🏫</span>
-              <div className="filter-text">
-                <span className="filter-label">같은 과/학부 제외</span>
-                <span className="filter-desc">나와 같은 {currentUser.dept} 제외</span>
-              </div>
-              <span className={`filter-badge ${deptFilter ? 'on' : 'off'}`}>
-                {deptFilter ? 'ON' : 'OFF'}
-              </span>
-            </button>
-          </div>
-
-          <button className="btn-login" style={{ marginTop: 'auto' }} onClick={startMatch}>
-            매칭 시작하기 💘
-          </button>
-        </div>
+      {members < matchSize && (
+        <button className="btn-signup" onClick={addMember}>
+          [테스트] 멤버 입장 시뮬
+        </button>
       )}
+
+      <button
+        className="btn-login"
+        onClick={startMatch}
+        disabled={members < matchSize || countdown !== null}
+      >
+        {countdown !== null
+          ? `${countdown}초 후 매칭 시작...`
+          : members < matchSize
+            ? `${matchSize - members}명 더 필요해요`
+            : '매칭 시작하기 💘'}
+      </button>
+    </div>
+  )
+
+  // ── 방 들어가기: 코드 입력 ──
+  if (view === 'join-input') return (
+    <div className="match-wrap">
+      <button className="btn-back" onClick={() => setView('select')}>← 뒤로</button>
+      <h2 className="match-title">방 들어가기</h2>
+      <p className="step-desc">방장에게 받은 6자리 방 번호를 입력해주세요.</p>
+
+      <div className="input-group">
+        <label>방 번호</label>
+        <input
+          type="text"
+          placeholder="6자리 방 번호 입력"
+          value={joinCode}
+          onChange={e => {
+            setJoinCode(e.target.value.replace(/\D/g, '').slice(0, 6))
+            setJoinError('')
+          }}
+          className={`pw-input ${joinError ? 'error' : ''}`}
+          maxLength={6}
+        />
+        {joinError && <p className="error-msg">{joinError}</p>}
+      </div>
+
+      <button className="btn-login" onClick={joinRoom} disabled={joinCode.length !== 6}>
+        입장하기
+      </button>
+    </div>
+  )
+
+  // ── 참가자 대기실 ──
+  if (view === 'join-wait') return (
+    <div className="match-wrap">
+      <button className="btn-back" onClick={() => setView('join-input')}>← 뒤로</button>
+      <h2 className="match-title">입장 완료!</h2>
+
+      <div className="room-code-box">
+        <p className="room-code-label">입장한 방 번호</p>
+        <p className="room-code">{joinCode}</p>
+      </div>
+
+      <div className="waiting-spinner">
+        <div className="spinner-dot" />
+        <div className="spinner-dot" />
+        <div className="spinner-dot" />
+      </div>
+      <p className="step-desc" style={{ textAlign: 'center' }}>
+        방장이 매칭을 시작하기를 기다리고 있어요...
+      </p>
+
+      <button className="btn-login" onClick={startMatch}>
+        [테스트] 매칭 시작
+      </button>
+    </div>
+  )
+
+  // ── 매칭 완료 ──
+  return (
+    <div className="match-wrap" style={{ alignItems: 'center', justifyContent: 'center' }}>
+      <p style={{ fontSize: '3rem' }}>🎉</p>
+      <h2 className="match-title" style={{ textAlign: 'center' }}>매칭 완료!</h2>
+      <p className="step-desc" style={{ textAlign: 'center' }}>채팅방이 열렸어요!</p>
+      <button className="btn-login" onClick={onBack}>채팅방 확인하기</button>
     </div>
   )
 }

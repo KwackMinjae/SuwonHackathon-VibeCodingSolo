@@ -177,7 +177,7 @@ function InviteModal({ onClose, onInvite }: {
 
   const handleSearch = () => {
     setSearched(true)
-    setFound(MOCK_USERS.find(u => u.studentId === query.trim()) ?? null)
+    setFound(MOCK_USERS.find((u: MockUser) => u.studentId === query.trim()) ?? null)
   }
 
   return (

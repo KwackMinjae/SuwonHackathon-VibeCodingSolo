@@ -1379,7 +1379,202 @@ body {
 
 .btn-plus:hover { background: #e0f4ff; }
 
-/* ── Random Match ── */
+/* ── Random Match (새 방식) ── */
+.match-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex: 1;
+  padding: 24px 20px 28px;
+  animation: fadeIn 0.3s ease both;
+}
+
+.match-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #1a8fa0;
+}
+
+/* 방 선택 카드 */
+.match-select-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.match-select-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 28px 20px;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  width: 100%;
+}
+
+.match-select-card:active { transform: scale(0.97); }
+
+.card-create {
+  background: linear-gradient(135deg, #e0f4ff, #c6eaf8);
+  box-shadow: 0 4px 16px rgba(33, 150, 166, 0.15);
+}
+
+.card-join {
+  background: linear-gradient(135deg, #fff0f6, #ffd6e7);
+  box-shadow: 0 4px 16px rgba(255, 105, 180, 0.12);
+}
+
+.match-card-icon { font-size: 2.2rem; }
+
+.match-card-label {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #1a1a2e;
+}
+
+.match-card-sub {
+  font-size: 0.8rem;
+  color: #666;
+}
+
+/* 인원 선택 버튼 */
+.match-size-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.match-size-btn {
+  padding: 10px 14px;
+  border: 2px solid #d0eaf0;
+  border-radius: 12px;
+  background: #fff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #aaa;
+  cursor: pointer;
+  transition: all 0.18s;
+  flex: 1;
+  min-width: 48px;
+}
+
+.match-size-btn.selected {
+  border-color: #1a8fa0;
+  color: #1a8fa0;
+  background: #e0f4ff;
+}
+
+/* 방 코드 박스 */
+.room-code-box {
+  background: linear-gradient(135deg, #e0f4ff, #f0faff);
+  border: 2px solid #87CEEB;
+  border-radius: 20px;
+  padding: 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.room-code-label {
+  font-size: 0.82rem;
+  color: #888;
+  font-weight: 600;
+}
+
+.room-code {
+  font-size: 2.6rem;
+  font-weight: 900;
+  color: #1a8fa0;
+  letter-spacing: 6px;
+}
+
+.room-code-hint {
+  font-size: 0.78rem;
+  color: #aaa;
+}
+
+/* 인원 바 */
+.member-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.member-bar-wrap {
+  width: 100%;
+  height: 8px;
+  background: #e8f4f8;
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.member-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #87CEEB, #1a8fa0);
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+
+.member-count {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #1a8fa0;
+  text-align: center;
+}
+
+.member-dots {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.member-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #d0eaf0;
+  background: #fff;
+  transition: all 0.3s;
+}
+
+.member-dot.filled {
+  background: #1a8fa0;
+  border-color: #1a8fa0;
+  transform: scale(1.15);
+}
+
+.match-notice {
+  font-size: 0.82rem;
+  color: #aaa;
+  text-align: center;
+}
+
+/* 대기 스피너 */
+.waiting-spinner {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 0;
+}
+
+.spinner-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #87CEEB;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.spinner-dot:nth-child(2) { animation-delay: 0.2s; }
+.spinner-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* ── (구) Random Match 잔여 클래스 유지 ── */
 .random-wrap {
   display: flex;
   flex-direction: column;
