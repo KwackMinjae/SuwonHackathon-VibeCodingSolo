@@ -161,7 +161,12 @@ const handleMatchSuccess = (matchedUsers: MockUser[], size: number) => {
       onBack={() => { setSub(null); setTab('채팅방') }}
       onSend={handleSend}
       onUpdateRoom={handleUpdateRoom}
-      onInvite={handleInvite}
+      onLeave={() => {
+        setChatRooms(prev => prev.filter(r => r.id !== activeRoom.id))
+        setActiveRoom(null)
+        setSub(null)
+        setTab('채팅방')
+      }}
     />
   )
 
