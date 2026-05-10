@@ -34,10 +34,11 @@ interface Props {
   onBack: () => void
   currentUser: UserProfile
   onMatchSuccess: (matchedUsers: MockUser[], size: number) => void
+  initialView?: View
 }
 
-export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess }: Props) {
-  const [view, setView] = useState<View>('select')
+export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess, initialView = 'select' }: Props) {
+  const [view, setView] = useState<View>(initialView)
   const [roomCode, setRoomCode] = useState('')
   const [matchSize, setMatchSize] = useState(2)
   const [members, setMembers] = useState(1)

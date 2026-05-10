@@ -4,7 +4,7 @@ import { ChatList, ChatRoomView, ChatRoom, ChatMessage } from './ChatScreen'
 import RandomMatchScreen, { UserProfile, MockUser } from './RandomMatchScreen'
 
 type Tab = '과팅' | '채팅방' | '설정'
-type SubScreen = null | 'random' | 'chatroom'
+type SubScreen = null | 'random-create' | 'random-join' | 'chatroom'
 
 interface ChatNotification {
   id: number
@@ -137,11 +137,21 @@ const handleMatchSuccess = (matchedUsers: MockUser[], size: number) => {
     setExpandedNotif(null)
   }
 
-  if (sub === 'random') return (
+  if (sub === 'random-create') return (
     <RandomMatchScreen
       onBack={() => setSub(null)}
       currentUser={currentUser}
       onMatchSuccess={handleMatchSuccess}
+      initialView="host-setup"
+    />
+  )
+
+  if (sub === 'random-join') return (
+    <RandomMatchScreen
+      onBack={() => setSub(null)}
+      currentUser={currentUser}
+      onMatchSuccess={handleMatchSuccess}
+      initialView="join-input"
     />
   )
 
@@ -209,7 +219,7 @@ const handleMatchSuccess = (matchedUsers: MockUser[], size: number) => {
       )}
 
       <div className="main-content">
-        {tab === '과팅'  && <GatingTab onRandom={() => setSub('random')} />}
+        {tab === '과팅'  && <GatingTab onCreate={() => setSub('random-create')} onJoin={() => setSub('random-join')} />}
         {tab === '채팅방' && <ChatList rooms={chatRooms} onOpenRoom={handleOpenRoom} />}
         {tab === '설정'  && (
           <SettingsTab
@@ -260,18 +270,26 @@ function navIcon(tab: Tab) {
   )
 }
 
-function GatingTab({ onRandom }: { onRandom: () => void }) {
+function GatingTab({ onCreate, onJoin }: { onCreate: () => void; onJoin: () => void }) {
   return (
     <div className="gating-tab">
       <div className="gating-header">
         <p className="gating-subtitle">설레는 과팅을 시작해보세요 💙</p>
       </div>
       <div className="gating-cards">
-        <button className="gating-card card-random" onClick={onRandom}>
-          <div className="card-icon">🎲</div>
+        <button className="gating-card card-notice" onClick={onCreate}>
+          <div className="card-icon">🏠</div>
           <div className="card-text">
-            <span className="card-title">랜덤매칭</span>
-            <span className="card-desc">방을 만들거나 입장해서<br />과팅 상대를 만나보세요</span>
+            <span className="card-title">방 만들기</span>
+            <span className="card-desc">방을 개설하고 고유 번호로<br />친구를 초대하세요</span>
+          </div>
+          <span className="card-arrow">›</span>
+        </button>
+        <button className="gating-card card-random" onClick={onJoin}>
+          <div className="card-icon">🚪</div>
+          <div className="card-text">
+            <span className="card-title">방 참여하기</span>
+            <span className="card-desc">방 번호를 입력해서<br />과팅방에 입장하세요</span>
           </div>
           <span className="card-arrow">›</span>
         </button>
