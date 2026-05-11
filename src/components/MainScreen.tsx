@@ -2,11 +2,11 @@ import { useState } from 'react'
 import SettingsTab from './SettingsTab'
 import { ChatList, ChatRoomView, ChatRoom, ChatMessage } from './ChatScreen'
 import RandomMatchScreen, { UserProfile, MockUser } from './RandomMatchScreen'
+import { api } from '../api/client'
 
 type Tab = '과팅' | '채팅방' | '설정'
 type SubScreen = null | 'random-create' | 'random-join' | 'random-instant' | 'chatroom'
 
-// 공개 방 목록 (방 만들기로 생성된 방)
 export interface PublicRoom {
   id: number
   title: string
@@ -20,6 +20,7 @@ interface Props {
   onAccountDeleted: () => void
   onPasswordReset: () => void
   currentUser: UserProfile
+  setCurrentUser: (user: UserProfile) => void
   darkMode: boolean
   onToggleDarkMode: () => void
 }
@@ -29,17 +30,19 @@ function nowTime() {
   return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset, currentUser, darkMode, onToggleDarkMode }: Props) {
+export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset, currentUser, setCurrentUser, darkMode, onToggleDarkMode }: Props) {
   const [tab, setTab]           = useState<Tab>('과팅')
   const [sub, setSub]           = useState<SubScreen>(null)
   const [chatRooms, setChatRooms]   = useState<ChatRoom[]>([])
   const [activeRoom, setActiveRoom] = useState<ChatRoom | null>(null)
   const [publicRooms, setPublicRooms] = useState<PublicRoom[]>([])
 
-  // ── 매칭 완료 시 채팅방 생성 ──
-  const handleMatchSuccess = (matchedUsers: MockUser[], size: number) => {
+  const handleMatchSuccess = (matchedUsers: MockUser[], size: number, roomId?: number) => {
     const t = nowTime()
     const members = [currentUser.nickname, ...matchedUsers.map(u => u.nickname)]
+    const memberIds: Record<string, number> = {}
+    matchedUsers.forEach(u => { if (u.id) memberIds[u.nickname] = u.id })
+
     const systemMsg: ChatMessage = {
       id: Date.now(),
       text: `🎉 ${size}v${size} 매칭이 완료되었어요!`,
@@ -55,12 +58,13 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
       time: t,
     }))
     const newRoom: ChatRoom = {
-      id: Date.now() + 1000,
+      id: roomId ?? Date.now() + 1000,
       title: `${size}v${size} 매칭`,
       messages: [systemMsg, ...introMsgs],
       capacity: size * 2,
       memberCount: size * 2,
       members,
+      memberIds,
       ratings: {},
     }
     setChatRooms(prev => [...prev, newRoom])
@@ -69,29 +73,26 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
     setTab('채팅방')
   }
 
-  // ── 방 만들기 완료 시 공개방 등록 ──
   const handleRoomCreated = (room: PublicRoom) => {
     setPublicRooms(prev => [...prev, room])
   }
 
-  // ── 방 참여 (공개방 목록에서) ──
-  const handleJoinPublicRoom = (pubRoom: PublicRoom) => {
+  const handleJoinPublicRoom = async (pubRoom: PublicRoom) => {
+    try {
+      await api.post('/rooms/join', { code: pubRoom.code }, true)
+    } catch { /* 이미 가입됐을 수도 있음 */ }
     const t = nowTime()
-    const members = [currentUser.nickname]
     const newRoom: ChatRoom = {
       id: pubRoom.id,
       title: pubRoom.title,
       messages: [{ id: Date.now(), text: '채팅방에 참여했어요! 인사를 건네보세요 👋', isMine: false, time: t }],
       capacity: pubRoom.capacity,
       memberCount: pubRoom.memberCount + 1,
-      members,
+      members: [currentUser.nickname],
       ratings: {},
     }
-    // 공개방 인원 증가, 꽉 차면 목록에서 제거
     setPublicRooms(prev => prev.map(r =>
-      r.id === pubRoom.id
-        ? { ...r, memberCount: r.memberCount + 1 }
-        : r
+      r.id === pubRoom.id ? { ...r, memberCount: r.memberCount + 1 } : r
     ).filter(r => r.memberCount < r.capacity))
     setChatRooms(prev => [...prev, newRoom])
     setActiveRoom(newRoom)
@@ -120,33 +121,21 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
     setActiveRoom(updatedRoom)
   }
 
-  const handleLeave = () => {
+  const handleLeave = async () => {
     if (!activeRoom) return
-    // 공개방이었으면 인원 감소 후 다시 목록에 추가
-    setPublicRooms(prev => {
-      const existing = prev.find(r => r.id === activeRoom.id)
-      if (existing) {
-        return prev.map(r => r.id === activeRoom.id ? { ...r, memberCount: r.memberCount - 1 } : r)
-      }
-      // 나가서 인원 줄면 다시 공개방에 등장할 수 있도록 (capacity가 있는 방만)
-      if (activeRoom.capacity > 0 && activeRoom.memberCount - 1 < activeRoom.capacity) {
-        return [...prev, {
-          id: activeRoom.id,
-          title: activeRoom.title,
-          capacity: activeRoom.capacity,
-          memberCount: activeRoom.memberCount - 1,
-          code: String(activeRoom.id).slice(-6),
-        }]
-      }
-      return prev
-    })
+    try {
+      await api.del(`/rooms/${activeRoom.id}/leave`, {}, true)
+    } catch { /* ignore */ }
     setChatRooms(prev => prev.filter(r => r.id !== activeRoom.id))
     setActiveRoom(null)
     setSub(null)
     setTab('채팅방')
   }
 
-  // ── 서브스크린 ──
+  const handleUpdateUser = (nickname: string) => {
+    setCurrentUser({ ...currentUser, nickname })
+  }
+
   if (sub === 'random-create') return (
     <RandomMatchScreen
       onBack={() => setSub(null)}
@@ -179,6 +168,8 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
   if (sub === 'chatroom' && activeRoom) return (
     <ChatRoomView
       room={activeRoom}
+      currentUserId={currentUser.id}
+      currentNickname={currentUser.nickname}
       onBack={() => { setSub(null); setTab('채팅방') }}
       onSend={handleSend}
       onUpdateRoom={handleUpdateRoom}
@@ -202,6 +193,8 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
             onPasswordReset={onPasswordReset}
             darkMode={darkMode}
             onToggleDarkMode={onToggleDarkMode}
+            currentUser={currentUser}
+            onUpdateUser={handleUpdateUser}
           />
         )}
       </div>

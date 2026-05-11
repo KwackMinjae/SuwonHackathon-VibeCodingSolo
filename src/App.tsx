@@ -5,40 +5,66 @@ import ForgotPasswordScreen from './components/ForgotPasswordScreen'
 import SignupScreen from './components/SignupScreen'
 import MainScreen from './components/MainScreen'
 import { UserProfile } from './components/RandomMatchScreen'
+import { getStoredUser, clearToken, UserInfo } from './api/client'
+import { disconnectSocket } from './api/socket'
 
 type Screen = 'splash' | 'login' | 'forgot' | 'signup' | 'main'
 
-const DEFAULT_USER: UserProfile = {
-  nickname: '나',
-  studentId: '20241234',
-  gender: '남',
-  dept: '컴퓨터학부',
+function userInfoToProfile(u: UserInfo): UserProfile {
+  return {
+    id: u.id,
+    nickname: u.nickname,
+    studentId: u.email,
+    gender: u.gender,
+    dept: u.dept,
+  }
 }
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('splash')
-  const [currentUser, setCurrentUser] = useState<UserProfile>(DEFAULT_USER)
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null)
   const [darkMode, setDarkMode] = useState(false)
 
   useEffect(() => {
-    const timer = setTimeout(() => setScreen('login'), 2000)
+    const timer = setTimeout(() => {
+      const stored = getStoredUser()
+      if (stored) {
+        setCurrentUser(userInfoToProfile(stored))
+        setScreen('main')
+      } else {
+        setScreen('login')
+      }
+    }, 2000)
     return () => clearTimeout(timer)
   }, [])
 
-  const handleSignupComplete = (user: UserProfile) => {
-    setCurrentUser(user)
+  const handleLogin = (user: UserInfo) => {
+    setCurrentUser(userInfoToProfile(user))
+    setScreen('main')
+  }
+
+  const handleSignupComplete = (user: UserInfo) => {
+    setCurrentUser(userInfoToProfile(user))
+    setScreen('login')
+  }
+
+  const handleLogout = () => {
+    clearToken()
+    disconnectSocket()
+    setCurrentUser(null)
     setScreen('login')
   }
 
   return (
     <div className={`phone-frame${darkMode ? ' dark' : ''}`}>
       {screen === 'splash' && <SplashScreen />}
-      {screen === 'main' && (
+      {screen === 'main' && currentUser && (
         <MainScreen
-          onLogout={() => setScreen('login')}
-          onAccountDeleted={() => setScreen('login')}
-          onPasswordReset={() => setScreen('login')}
+          onLogout={handleLogout}
+          onAccountDeleted={handleLogout}
+          onPasswordReset={handleLogout}
           currentUser={currentUser}
+          setCurrentUser={setCurrentUser}
           darkMode={darkMode}
           onToggleDarkMode={() => setDarkMode(p => !p)}
         />
@@ -49,7 +75,7 @@ export default function App() {
             <LoginScreen
               onForgot={() => setScreen('forgot')}
               onSignup={() => setScreen('signup')}
-              onLogin={() => setScreen('main')}
+              onLogin={handleLogin}
             />
           )}
           {screen === 'forgot' && (

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { UserProfile } from './RandomMatchScreen'
+import { api, setToken, storeUser, UserInfo } from '../api/client'
 
 const DEPARTMENTS = [
   '인문학부', '외국어학부', '법행정학부', '미디어커뮤니케이션학과',
@@ -10,27 +10,22 @@ const DEPARTMENTS = [
   '간호학과', '아동가족복지학과', '의류학과', '식품영양학과', '디지털콘텐츠',
 ]
 
-function generateCode() {
-  return String(Math.floor(100000 + Math.random() * 900000))
-}
-
 type Step = 'email' | 'verify' | 'info'
 
 interface Props {
   onBack: () => void
-  onComplete?: (user: UserProfile) => void
+  onComplete?: (user: UserInfo) => void
 }
 
 export default function SignupScreen({ onBack, onComplete }: Props) {
   const [step, setStep] = useState<Step>('email')
+  const [loading, setLoading] = useState(false)
 
-  // 이메일 인증
   const [emailId, setEmailId] = useState('')
   const [sentCode, setSentCode] = useState('')
   const [inputCode, setInputCode] = useState('')
-  const [codeError, setCodeError] = useState(false)
+  const [codeError, setCodeError] = useState('')
 
-  // 회원 정보
   const [nickname, setNickname] = useState('')
   const [gender, setGender] = useState<'남' | '여' | ''>('')
   const [password, setPassword] = useState('')
@@ -40,25 +35,37 @@ export default function SignupScreen({ onBack, onComplete }: Props) {
 
   const studentId = emailId.slice(0, 2)
 
-  const sendCode = () => {
-    const code = generateCode()
-    setSentCode(code)
-    setInputCode('')
-    setCodeError(false)
-    setStep('verify')
-    alert(`[개발 테스트용]\n${emailId}@suwon.ac.kr 로 인증번호가 전송됐어요.\n인증번호: ${code}`)
-  }
-
-  const verifyCode = () => {
-    if (inputCode === sentCode) {
-      setCodeError(false)
-      setStep('info')
-    } else {
-      setCodeError(true)
+  const sendCode = async () => {
+    setLoading(true)
+    try {
+      const data = await api.post<{ code: string }>('/auth/send-code', { email: emailId, type: 'signup' })
+      setSentCode(data.code)
+      setInputCode('')
+      setCodeError('')
+      setStep('verify')
+      alert(`[개발 테스트용]\n${emailId}@suwon.ac.kr 로 인증번호가 전송됐어요.\n인증번호: ${data.code}`)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '전송에 실패했습니다.')
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleSignup = () => {
+  const verifyCode = async () => {
+    if (inputCode !== sentCode) { setCodeError('인증번호를 확인해주세요.'); return }
+    setLoading(true)
+    try {
+      await api.post('/auth/verify-code', { email: emailId, code: inputCode, type: 'signup' })
+      setCodeError('')
+      setStep('info')
+    } catch (e: unknown) {
+      setCodeError(e instanceof Error ? e.message : '인증에 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSignup = async () => {
     const newErrors: Record<string, string> = {}
     if (!nickname) newErrors.nickname = '닉네임을 입력해주세요.'
     if (nickname.length > 10) newErrors.nickname = '닉네임은 10자 이하여야 해요.'
@@ -66,19 +73,27 @@ export default function SignupScreen({ onBack, onComplete }: Props) {
     if (password.length < 8) newErrors.password = '비밀번호는 8자 이상이어야 해요.'
     if (password !== confirmPw) newErrors.confirmPw = '비밀번호가 일치하지 않아요.'
     if (!department) newErrors.department = '학과를 선택해주세요.'
-    if (studentId.length < 2) newErrors.studentId = '이메일을 다시 확인해주세요.'
-
     setErrors(newErrors)
     if (Object.keys(newErrors).length > 0) return
 
-    alert('회원가입이 완료됐어요!')
-    onComplete?.({
-      nickname,
-      studentId: emailId,
-      gender: gender as '남' | '여',
-      dept: department,
-    })
-    onBack()
+    setLoading(true)
+    try {
+      const data = await api.post<{ token: string; user: UserInfo }>('/auth/register', {
+        email: emailId,
+        password,
+        nickname,
+        gender,
+        dept: department,
+      })
+      setToken(data.token)
+      storeUser(data.user)
+      alert('회원가입이 완료됐어요!')
+      onComplete?.(data.user)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '회원가입에 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -86,7 +101,6 @@ export default function SignupScreen({ onBack, onComplete }: Props) {
       <button className="btn-back" onClick={onBack}>← 로그인으로</button>
       <h2 className="login-title">회원가입</h2>
 
-      {/* Step 1: 이메일 입력 */}
       {step === 'email' && (
         <>
           <p className="step-desc">학교 이메일로 인증을 진행해주세요.</p>
@@ -103,13 +117,12 @@ export default function SignupScreen({ onBack, onComplete }: Props) {
               <span className="email-domain">@suwon.ac.kr</span>
             </div>
           </div>
-          <button className="btn-login" onClick={sendCode} disabled={emailId.length < 2}>
-            인증번호 전송
+          <button className="btn-login" onClick={sendCode} disabled={emailId.length < 2 || loading}>
+            {loading ? '전송 중...' : '인증번호 전송'}
           </button>
         </>
       )}
 
-      {/* Step 2: 인증번호 확인 */}
       {step === 'verify' && (
         <>
           <p className="step-desc">
@@ -121,23 +134,21 @@ export default function SignupScreen({ onBack, onComplete }: Props) {
               type="text"
               placeholder="인증번호 6자리"
               value={inputCode}
-              onChange={e => { setInputCode(e.target.value); setCodeError(false) }}
+              onChange={e => { setInputCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setCodeError('') }}
               className={`pw-input ${codeError ? 'error' : ''}`}
               maxLength={6}
             />
-            {codeError && <p className="error-msg">인증번호를 확인해주세요.</p>}
+            {codeError && <p className="error-msg">{codeError}</p>}
           </div>
-          <button className="btn-login" onClick={verifyCode} disabled={inputCode.length !== 6}>
-            확인
+          <button className="btn-login" onClick={verifyCode} disabled={inputCode.length !== 6 || loading}>
+            {loading ? '확인 중...' : '확인'}
           </button>
-          <button className="btn-forgot" onClick={sendCode}>인증번호 재전송하기</button>
+          <button className="btn-forgot" onClick={sendCode} disabled={loading}>인증번호 재전송하기</button>
         </>
       )}
 
-      {/* Step 3: 회원 정보 입력 */}
       {step === 'info' && (
         <>
-          {/* 닉네임 */}
           <div className="input-group">
             <label>닉네임 <span className="label-hint">(10자 이하)</span></label>
             <input
@@ -149,14 +160,11 @@ export default function SignupScreen({ onBack, onComplete }: Props) {
               maxLength={10}
             />
             <div className="input-meta">
-              {errors.nickname
-                ? <p className="error-msg">{errors.nickname}</p>
-                : <span />}
+              {errors.nickname ? <p className="error-msg">{errors.nickname}</p> : <span />}
               <span className="char-count">{nickname.length}/10</span>
             </div>
           </div>
 
-          {/* 성별 */}
           <div className="input-group">
             <label>성별</label>
             <div className="gender-row">
@@ -173,7 +181,6 @@ export default function SignupScreen({ onBack, onComplete }: Props) {
             {errors.gender && <p className="error-msg">{errors.gender}</p>}
           </div>
 
-          {/* 비밀번호 */}
           <div className="input-group">
             <label>비밀번호 <span className="label-hint">(8자 이상)</span></label>
             <input
@@ -186,7 +193,6 @@ export default function SignupScreen({ onBack, onComplete }: Props) {
             {errors.password && <p className="error-msg">{errors.password}</p>}
           </div>
 
-          {/* 비밀번호 확인 */}
           <div className="input-group">
             <label>비밀번호 확인</label>
             <input
@@ -199,13 +205,11 @@ export default function SignupScreen({ onBack, onComplete }: Props) {
             {errors.confirmPw && <p className="error-msg">{errors.confirmPw}</p>}
           </div>
 
-          {/* 학번 */}
           <div className="input-group">
             <label>학번</label>
             <div className="student-id-box">{studentId}학번</div>
           </div>
 
-          {/* 학과 선택 */}
           <div className="input-group">
             <label>학과/부</label>
             <select
@@ -221,7 +225,9 @@ export default function SignupScreen({ onBack, onComplete }: Props) {
             {errors.department && <p className="error-msg">{errors.department}</p>}
           </div>
 
-          <button className="btn-login" onClick={handleSignup}>가입하기</button>
+          <button className="btn-login" onClick={handleSignup} disabled={loading}>
+            {loading ? '가입 중...' : '가입하기'}
+          </button>
         </>
       )}
     </div>

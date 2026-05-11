@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
+import { getSocket } from '../api/socket'
+import { api } from '../api/client'
 
 export interface ChatMessage {
   id: number
@@ -7,6 +9,7 @@ export interface ChatMessage {
   senderName?: string
   time: string
   isAppointment?: boolean
+  userId?: number
 }
 
 export interface Appointment {
@@ -21,10 +24,11 @@ export interface ChatRoom {
   title: string
   messages: ChatMessage[]
   appointment?: Appointment
-  capacity: number        // 최대 인원
-  memberCount: number     // 현재 인원
-  members: string[]       // 닉네임 목록
-  ratings: Record<string, number> // 내가 준 별점 { nickname: stars }
+  capacity: number
+  memberCount: number
+  members: string[]
+  memberIds?: Record<string, number>
+  ratings: Record<string, number>
 }
 
 function nowTime() {
@@ -58,7 +62,6 @@ function canRate(appt?: Appointment) {
   return Date.now() - new Date(appt.datetimeISO).getTime() >= 4 * 60 * 60 * 1000
 }
 
-// ── 약속 설정 모달 ──
 function AppointmentModal({ onClose, onSend }: {
   onClose: () => void
   onSend: (place: string, dt: Date) => void
@@ -102,7 +105,6 @@ function AppointmentModal({ onClose, onSend }: {
   )
 }
 
-// ── 만난인증 모달 ──
 function VerifyModal({ appointment, onVerify, onClose }: {
   appointment: Appointment; onVerify: () => void; onClose: () => void
 }) {
@@ -152,7 +154,6 @@ function VerifyModal({ appointment, onVerify, onClose }: {
   )
 }
 
-// ── 별점 주기 모달 ──
 function RatingModal({ members, ratings, appt, onRate, onClose }: {
   members: string[]
   ratings: Record<string, number>
@@ -173,11 +174,7 @@ function RatingModal({ members, ratings, appt, onRate, onClose }: {
           <h3 className="modal-title">⭐ 별점 주기</h3>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
-
-        <div className="rating-notice">
-          🔒 별점은 상대방에게 공개되지 않아요
-        </div>
-
+        <div className="rating-notice">🔒 별점은 상대방에게 공개되지 않아요</div>
         {!ratable && (
           <div className="rating-locked">
             {!appt || !appt.accepted
@@ -185,33 +182,25 @@ function RatingModal({ members, ratings, appt, onRate, onClose }: {
               : `약속 후 약 ${hoursLeft}시간이 지나면\n별점을 줄 수 있어요.`}
           </div>
         )}
-
         {ratable && members.filter(m => m !== '나').map(nickname => (
           <div key={nickname} className="rating-row">
             <span className="rating-name">{nickname}</span>
             <div className="star-row">
               {[1, 2, 3, 4, 5].map(s => (
-                <button
-                  key={s}
-                  className={`star-btn ${(local[nickname] ?? 0) >= s ? 'filled' : ''}`}
-                  onClick={() => {
-                    const updated = { ...local, [nickname]: s }
-                    setLocal(updated)
-                    onRate(nickname, s)
-                  }}
-                >★</button>
+                <button key={s} className={`star-btn ${(local[nickname] ?? 0) >= s ? 'filled' : ''}`}
+                  onClick={() => { const updated = { ...local, [nickname]: s }; setLocal(updated); onRate(nickname, s) }}>
+                  ★
+                </button>
               ))}
             </div>
           </div>
         ))}
-
         <button className="btn-login" onClick={onClose}>완료</button>
       </div>
     </div>
   )
 }
 
-// ── + 메뉴 ──
 function PlusMenu({ onAppt, onRate, onLeave, onClose }: {
   onAppt: () => void; onRate: () => void; onLeave: () => void; onClose: () => void
 }) {
@@ -233,7 +222,6 @@ function PlusMenu({ onAppt, onRate, onLeave, onClose }: {
   )
 }
 
-// ── 채팅방 나가기 확인 모달 ──
 function LeaveModal({ onClose, onLeave }: { onClose: () => void; onLeave: () => void }) {
   return (
     <div className="modal-overlay">
@@ -254,7 +242,6 @@ function LeaveModal({ onClose, onLeave }: { onClose: () => void; onLeave: () => 
   )
 }
 
-// ── 약속 카드 ──
 function AppointmentCard({ appt, onAccept }: { appt: Appointment; onAccept: () => void }) {
   return (
     <div className="appt-card">
@@ -278,7 +265,6 @@ function AppointmentCard({ appt, onAccept }: { appt: Appointment; onAccept: () =
   )
 }
 
-// ── 채팅방 목록 ──
 export function ChatList({ rooms, onOpenRoom }: { rooms: ChatRoom[]; onOpenRoom: (room: ChatRoom) => void }) {
   return (
     <div className="chat-list-wrap">
@@ -307,16 +293,17 @@ export function ChatList({ rooms, onOpenRoom }: { rooms: ChatRoom[]; onOpenRoom:
   )
 }
 
-// ── 채팅방 뷰 ──
 interface RoomProps {
   room: ChatRoom
+  currentUserId?: number
+  currentNickname?: string
   onBack: () => void
   onSend: (text: string) => void
   onUpdateRoom: (room: ChatRoom) => void
   onLeave: () => void
 }
 
-export function ChatRoomView({ room, onBack, onSend, onUpdateRoom, onLeave }: RoomProps) {
+export function ChatRoomView({ room, currentUserId, currentNickname, onBack, onSend, onUpdateRoom, onLeave }: RoomProps) {
   const [input, setInput]               = useState('')
   const [showPlus, setShowPlus]         = useState(false)
   const [showAppModal, setShowAppModal] = useState(false)
@@ -326,32 +313,120 @@ export function ChatRoomView({ room, onBack, onSend, onUpdateRoom, onLeave }: Ro
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    const socket = getSocket()
+    socket.emit('join-room', room.id)
+
+    socket.on('new-message', (msg: { id: number; text: string; senderName: string; userId: number; time: string; type: string }) => {
+      const newMsg: ChatMessage = {
+        id: msg.id,
+        text: msg.text,
+        isMine: msg.userId === currentUserId,
+        senderName: msg.senderName,
+        time: msg.time,
+        userId: msg.userId,
+        isAppointment: msg.type === 'appointment',
+      }
+      onUpdateRoom({ ...room, messages: [...room.messages, newMsg] })
+    })
+
+    socket.on('appointment-updated', (data: { place: string; datetimeISO: string; accepted: boolean; verified: boolean }) => {
+      const apptMsg: ChatMessage = { id: Date.now(), text: '', isMine: false, time: nowTime(), isAppointment: true }
+      onUpdateRoom({
+        ...room,
+        messages: [...room.messages, apptMsg],
+        appointment: { place: data.place, datetimeISO: data.datetimeISO, accepted: false, verified: false },
+      })
+    })
+
+    socket.on('appointment-accepted', () => {
+      if (room.appointment) {
+        onUpdateRoom({ ...room, appointment: { ...room.appointment, accepted: true } })
+      }
+    })
+
+    socket.on('appointment-verified', () => {
+      if (room.appointment) {
+        onUpdateRoom({ ...room, appointment: { ...room.appointment, verified: true } })
+      }
+    })
+
+    return () => {
+      socket.off('new-message')
+      socket.off('appointment-updated')
+      socket.off('appointment-accepted')
+      socket.off('appointment-verified')
+      socket.emit('leave-room', room.id)
+    }
+  }, [room.id])
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [room.messages.length])
 
   const appt = room.appointment
 
-  const handleSetAppointment = (place: string, dt: Date) => {
-    const apptMsg: ChatMessage = { id: Date.now(), text: '', isMine: true, time: nowTime(), isAppointment: true }
-    onUpdateRoom({
-      ...room,
-      messages: [...room.messages, apptMsg],
-      appointment: { place, datetimeISO: dt.toISOString(), accepted: false, verified: false },
-    })
+  const handleSetAppointment = async (place: string, dt: Date) => {
+    const datetimeISO = dt.toISOString()
+    try {
+      await api.post(`/rooms/${room.id}/appointment`, { place, datetimeISO }, true)
+      const socket = getSocket()
+      socket.emit('appointment-set', { roomId: room.id, place, datetimeISO })
+      const apptMsg: ChatMessage = { id: Date.now(), text: '', isMine: true, time: nowTime(), isAppointment: true }
+      onUpdateRoom({
+        ...room,
+        messages: [...room.messages, apptMsg],
+        appointment: { place, datetimeISO, accepted: false, verified: false },
+      })
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '약속 설정에 실패했습니다.')
+    }
     setShowAppModal(false)
   }
 
-  const handleRate = (nickname: string, stars: number) => {
-    onUpdateRoom({ ...room, ratings: { ...room.ratings, [nickname]: stars } })
+  const handleAcceptAppointment = async () => {
+    try {
+      await api.put(`/rooms/${room.id}/appointment/accept`, {}, true)
+      const socket = getSocket()
+      socket.emit('appointment-accept', room.id)
+      if (appt) onUpdateRoom({ ...room, appointment: { ...appt, accepted: true } })
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '수락에 실패했습니다.')
+    }
+  }
+
+  const handleVerify = async () => {
+    try {
+      await api.put(`/rooms/${room.id}/appointment/verify`, {}, true)
+      const socket = getSocket()
+      socket.emit('appointment-verify', room.id)
+      if (appt) onUpdateRoom({ ...room, appointment: { ...appt, verified: true } })
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '인증에 실패했습니다.')
+    }
+  }
+
+  const handleRate = async (nickname: string, stars: number) => {
+    const rateeId = room.memberIds?.[nickname]
+    if (!rateeId) return
+    try {
+      await api.post(`/rooms/${room.id}/ratings`, { rateeId, stars }, true)
+      onUpdateRoom({ ...room, ratings: { ...room.ratings, [nickname]: stars } })
+    } catch { /* 별점 실패 시 무시 */ }
   }
 
   const handleSend = () => {
     if (!input.trim()) return
-    onSend(input.trim())
+    const socket = getSocket()
+    socket.emit('send-message', { roomId: room.id, text: input.trim() })
+    // 낙관적 업데이트
+    const msg: ChatMessage = {
+      id: Date.now(), text: input.trim(), isMine: true,
+      senderName: currentNickname, time: nowTime(), userId: currentUserId,
+    }
+    onUpdateRoom({ ...room, messages: [...room.messages, msg] })
     setInput('')
   }
 
-  // 우상단 버튼
   let rightBtn: React.ReactNode
   if (!appt || !appt.accepted) {
     rightBtn = <button className="btn-appt-header" onClick={() => setShowAppModal(true)}>📍 약속장소 지정</button>
@@ -373,7 +448,7 @@ export function ChatRoomView({ room, onBack, onSend, onUpdateRoom, onLeave }: Ro
       )}
       {showAppModal && <AppointmentModal onClose={() => setShowAppModal(false)} onSend={handleSetAppointment} />}
       {showVerify && appt && (
-        <VerifyModal appointment={appt} onVerify={() => onUpdateRoom({ ...room, appointment: { ...appt, verified: true } })} onClose={() => setShowVerify(false)} />
+        <VerifyModal appointment={appt} onVerify={handleVerify} onClose={() => setShowVerify(false)} />
       )}
       {showRating && (
         <RatingModal
@@ -396,7 +471,7 @@ export function ChatRoomView({ room, onBack, onSend, onUpdateRoom, onLeave }: Ro
         {room.messages.map(msg =>
           msg.isAppointment && appt ? (
             <div key={msg.id} className="appt-card-wrapper">
-              <AppointmentCard appt={appt} onAccept={() => onUpdateRoom({ ...room, appointment: { ...appt, accepted: true } })} />
+              <AppointmentCard appt={appt} onAccept={handleAcceptAppointment} />
             </div>
           ) : (
             <div key={msg.id} className={`chat-bubble-wrap ${msg.isMine ? 'mine' : 'theirs'}`}>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { api } from '../api/client'
 
 type Step = 'email' | 'verify' | 'reset'
 
@@ -6,12 +7,9 @@ interface Props {
   onBack: () => void
 }
 
-function generateCode() {
-  return String(Math.floor(100000 + Math.random() * 900000))
-}
-
 export default function ForgotPasswordScreen({ onBack }: Props) {
   const [step, setStep] = useState<Step>('email')
+  const [loading, setLoading] = useState(false)
   const [emailId, setEmailId] = useState('')
   const [sentCode, setSentCode] = useState('')
   const [inputCode, setInputCode] = useState('')
@@ -21,37 +19,50 @@ export default function ForgotPasswordScreen({ onBack }: Props) {
   const [pwError, setPwError] = useState('')
   const [done, setDone] = useState(false)
 
-  const sendCode = () => {
-    const code = generateCode()
-    setSentCode(code)
-    setInputCode('')
-    setCodeError(false)
-    setStep('verify')
-    // 실제 서비스에서는 이메일 API 호출
-    alert(`[개발 테스트용]\n${emailId}@suwon.ac.kr 로 인증번호가 전송됐어요.\n인증번호: ${code}`)
+  const sendCode = async () => {
+    setLoading(true)
+    try {
+      const data = await api.post<{ code: string }>('/auth/send-code', { email: emailId, type: 'reset' })
+      setSentCode(data.code)
+      setInputCode('')
+      setCodeError(false)
+      setStep('verify')
+      alert(`[개발 테스트용]\n${emailId}@suwon.ac.kr 로 인증번호가 전송됐어요.\n인증번호: ${data.code}`)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '전송에 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const verifyCode = () => {
-    if (inputCode === sentCode) {
+  const verifyCode = async () => {
+    if (inputCode !== sentCode) { setCodeError(true); return }
+    setLoading(true)
+    try {
+      await api.post('/auth/verify-code', { email: emailId, code: inputCode, type: 'reset' })
       setCodeError(false)
       setStep('reset')
-    } else {
+    } catch {
       setCodeError(true)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const resetPassword = () => {
-    if (newPw.length < 8) {
-      setPwError('비밀번호는 8자 이상이어야 해요.')
-      return
-    }
-    if (newPw !== confirmPw) {
-      setPwError('비밀번호가 일치하지 않아요.')
-      return
-    }
+  const resetPassword = async () => {
+    if (newPw.length < 8) { setPwError('비밀번호는 8자 이상이어야 해요.'); return }
+    if (newPw !== confirmPw) { setPwError('비밀번호가 일치하지 않아요.'); return }
     setPwError('')
-    setDone(true)
-    setTimeout(() => onBack(), 2000)
+    setLoading(true)
+    try {
+      await api.post('/auth/reset-password', { email: emailId, password: newPw })
+      setDone(true)
+      setTimeout(() => onBack(), 2000)
+    } catch (e: unknown) {
+      setPwError(e instanceof Error ? e.message : '재설정에 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (done) {
@@ -69,7 +80,6 @@ export default function ForgotPasswordScreen({ onBack }: Props) {
       <button className="btn-back" onClick={onBack}>← 로그인으로</button>
       <h2 className="login-title">비밀번호 찾기</h2>
 
-      {/* Step 1: 이메일 입력 */}
       {step === 'email' && (
         <>
           <p className="step-desc">가입한 학교 이메일을 입력해주세요.</p>
@@ -86,13 +96,12 @@ export default function ForgotPasswordScreen({ onBack }: Props) {
               <span className="email-domain">@suwon.ac.kr</span>
             </div>
           </div>
-          <button className="btn-login" onClick={sendCode} disabled={!emailId}>
-            인증번호 전송
+          <button className="btn-login" onClick={sendCode} disabled={!emailId || loading}>
+            {loading ? '전송 중...' : '인증번호 전송'}
           </button>
         </>
       )}
 
-      {/* Step 2: 인증번호 확인 */}
       {step === 'verify' && (
         <>
           <p className="step-desc">
@@ -104,22 +113,21 @@ export default function ForgotPasswordScreen({ onBack }: Props) {
               type="text"
               placeholder="인증번호 6자리"
               value={inputCode}
-              onChange={e => { setInputCode(e.target.value); setCodeError(false) }}
+              onChange={e => { setInputCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setCodeError(false) }}
               className={`pw-input ${codeError ? 'error' : ''}`}
               maxLength={6}
             />
             {codeError && <p className="error-msg">인증번호를 확인해주세요.</p>}
           </div>
-          <button className="btn-login" onClick={verifyCode} disabled={inputCode.length !== 6}>
-            확인
+          <button className="btn-login" onClick={verifyCode} disabled={inputCode.length !== 6 || loading}>
+            {loading ? '확인 중...' : '확인'}
           </button>
-          <button className="btn-forgot" onClick={sendCode}>
+          <button className="btn-forgot" onClick={sendCode} disabled={loading}>
             인증번호 재전송하기
           </button>
         </>
       )}
 
-      {/* Step 3: 비밀번호 재설정 */}
       {step === 'reset' && (
         <>
           <p className="step-desc">새로운 비밀번호를 입력해주세요.</p>
@@ -144,8 +152,8 @@ export default function ForgotPasswordScreen({ onBack }: Props) {
             />
             {pwError && <p className="error-msg">{pwError}</p>}
           </div>
-          <button className="btn-login" onClick={resetPassword}>
-            비밀번호 재설정
+          <button className="btn-login" onClick={resetPassword} disabled={loading}>
+            {loading ? '처리 중...' : '비밀번호 재설정'}
           </button>
         </>
       )}

@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { api } from '../api/client'
+import { UserProfile } from './RandomMatchScreen'
 
 type View = 'main' | 'profile' | 'pwStep1' | 'pwStep2' | 'pwStep3' | 'deleteConfirm' | 'deleteConfirm2' | 'deleted'
 
@@ -8,17 +10,16 @@ interface Props {
   onPasswordReset: () => void
   darkMode: boolean
   onToggleDarkMode: () => void
+  currentUser: UserProfile
+  onUpdateUser: (nickname: string) => void
 }
 
-function generateCode() {
-  return String(Math.floor(100000 + Math.random() * 900000))
-}
-
-export default function SettingsTab({ onLogout, onAccountDeleted, onPasswordReset, darkMode, onToggleDarkMode }: Props) {
+export default function SettingsTab({ onLogout, onAccountDeleted, onPasswordReset, darkMode, onToggleDarkMode, currentUser, onUpdateUser }: Props) {
   const [view, setView] = useState<View>('main')
+  const [loading, setLoading] = useState(false)
 
   // 프로필
-  const [nickname, setNickname] = useState('')
+  const [nickname, setNickname] = useState(currentUser.nickname)
   const [nicknameError, setNicknameError] = useState('')
   const [nicknameSaved, setNicknameSaved] = useState(false)
 
@@ -35,13 +36,20 @@ export default function SettingsTab({ onLogout, onAccountDeleted, onPasswordRese
   const [deletePw, setDeletePw] = useState('')
   const [deletePwError, setDeletePwError] = useState('')
 
-  const sendCode = () => {
-    const code = generateCode()
-    setSentCode(code)
-    setInputCode('')
-    setCodeError(false)
-    setView('pwStep2')
-    alert(`[개발 테스트용]\n${emailId}@suwon.ac.kr 로 인증번호가 전송됐어요.\n인증번호: ${code}`)
+  const sendCode = async () => {
+    setLoading(true)
+    try {
+      const data = await api.post<{ code: string }>('/auth/send-code', { email: emailId, type: 'reset' })
+      setSentCode(data.code)
+      setInputCode('')
+      setCodeError(false)
+      setView('pwStep2')
+      alert(`[개발 테스트용]\n${emailId}@suwon.ac.kr 로 인증번호가 전송됐어요.\n인증번호: ${data.code}`)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '전송에 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const verifyCode = () => {
@@ -49,40 +57,68 @@ export default function SettingsTab({ onLogout, onAccountDeleted, onPasswordRese
     else setCodeError(true)
   }
 
-  const resetPassword = () => {
+  const resetPassword = async () => {
     if (newPw.length < 8) { setPwError('비밀번호는 8자 이상이어야 해요.'); return }
     if (newPw !== confirmPw) { setPwError('비밀번호가 일치하지 않아요.'); return }
     setPwError('')
-    alert('비밀번호가 재설정됐어요. 다시 로그인해주세요.')
-    onPasswordReset()
+    setLoading(true)
+    try {
+      await api.post('/auth/reset-password', { email: emailId, password: newPw })
+      alert('비밀번호가 재설정됐어요. 다시 로그인해주세요.')
+      onPasswordReset()
+    } catch (e: unknown) {
+      setPwError(e instanceof Error ? e.message : '재설정에 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const saveNickname = () => {
+  const saveNickname = async () => {
     if (!nickname) { setNicknameError('닉네임을 입력해주세요.'); return }
     if (nickname.length > 10) { setNicknameError('10자 이하로 입력해주세요.'); return }
     setNicknameError('')
-    setNicknameSaved(true)
-    setTimeout(() => setNicknameSaved(false), 2000)
+    setLoading(true)
+    try {
+      await api.put('/users/profile', { nickname }, true)
+      onUpdateUser(nickname)
+      setNicknameSaved(true)
+      setTimeout(() => setNicknameSaved(false), 2000)
+    } catch (e: unknown) {
+      setNicknameError(e instanceof Error ? e.message : '저장에 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const tryDelete = () => {
+  const tryDelete = async () => {
     if (deletePw.length < 8) { setDeletePwError('비밀번호를 올바르게 입력해주세요.'); return }
     setDeletePwError('')
     setView('deleteConfirm2')
   }
 
-  // ── 메인 설정 화면 ──
+  const confirmDelete = async () => {
+    setLoading(true)
+    try {
+      await api.del('/users/me', { password: deletePw }, true)
+      setView('deleted')
+    } catch (e: unknown) {
+      setDeletePwError(e instanceof Error ? e.message : '삭제에 실패했습니다.')
+      setView('deleteConfirm')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   if (view === 'main') return (
     <div className="settings-wrap">
       <h2 className="settings-title">설정</h2>
       <div className="settings-list">
-        <button className="settings-item" onClick={() => setView('profile')}>
+        <button className="settings-item" onClick={() => { setNickname(currentUser.nickname); setView('profile') }}>
           <span className="settings-item-icon">👤</span>
           <span className="settings-item-label">프로필 수정</span>
           <span className="settings-item-arrow">›</span>
         </button>
 
-        {/* 다크모드 토글 */}
         <div className="settings-item" onClick={onToggleDarkMode} style={{ cursor: 'pointer' }}>
           <span className="settings-item-icon">{darkMode ? '🌙' : '☀️'}</span>
           <span className="settings-item-label">다크모드</span>
@@ -105,7 +141,6 @@ export default function SettingsTab({ onLogout, onAccountDeleted, onPasswordRese
     </div>
   )
 
-  // ── 프로필 수정 ──
   if (view === 'profile') return (
     <div className="login-wrap">
       <button className="btn-back" onClick={() => setView('main')}>← 설정으로</button>
@@ -127,7 +162,9 @@ export default function SettingsTab({ onLogout, onAccountDeleted, onPasswordRese
         </div>
       </div>
       {nicknameSaved && <p style={{ color: '#1a8fa0', fontSize: '0.85rem', textAlign: 'center' }}>닉네임이 저장됐어요!</p>}
-      <button className="btn-login" onClick={saveNickname}>닉네임 저장</button>
+      <button className="btn-login" onClick={saveNickname} disabled={loading}>
+        {loading ? '저장 중...' : '닉네임 저장'}
+      </button>
 
       <div className="divider" />
 
@@ -137,7 +174,6 @@ export default function SettingsTab({ onLogout, onAccountDeleted, onPasswordRese
     </div>
   )
 
-  // ── 비밀번호 재설정 Step1: 이메일 ──
   if (view === 'pwStep1') return (
     <div className="login-wrap">
       <button className="btn-back" onClick={() => setView('profile')}>← 프로필 수정으로</button>
@@ -156,11 +192,12 @@ export default function SettingsTab({ onLogout, onAccountDeleted, onPasswordRese
           <span className="email-domain">@suwon.ac.kr</span>
         </div>
       </div>
-      <button className="btn-login" onClick={sendCode} disabled={!emailId}>인증번호 전송</button>
+      <button className="btn-login" onClick={sendCode} disabled={!emailId || loading}>
+        {loading ? '전송 중...' : '인증번호 전송'}
+      </button>
     </div>
   )
 
-  // ── Step2: 인증번호 ──
   if (view === 'pwStep2') return (
     <div className="login-wrap">
       <button className="btn-back" onClick={() => setView('pwStep1')}>← 이전으로</button>
@@ -172,18 +209,17 @@ export default function SettingsTab({ onLogout, onAccountDeleted, onPasswordRese
           type="text"
           placeholder="인증번호 6자리"
           value={inputCode}
-          onChange={e => { setInputCode(e.target.value); setCodeError(false) }}
+          onChange={e => { setInputCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setCodeError(false) }}
           className={`pw-input ${codeError ? 'error' : ''}`}
           maxLength={6}
         />
         {codeError && <p className="error-msg">인증번호를 확인해주세요.</p>}
       </div>
       <button className="btn-login" onClick={verifyCode} disabled={inputCode.length !== 6}>확인</button>
-      <button className="btn-forgot" onClick={sendCode}>인증번호 재전송하기</button>
+      <button className="btn-forgot" onClick={sendCode} disabled={loading}>인증번호 재전송하기</button>
     </div>
   )
 
-  // ── Step3: 새 비밀번호 ──
   if (view === 'pwStep3') return (
     <div className="login-wrap">
       <h2 className="login-title">새 비밀번호 설정</h2>
@@ -201,11 +237,12 @@ export default function SettingsTab({ onLogout, onAccountDeleted, onPasswordRese
           className={`pw-input ${pwError ? 'error' : ''}`} />
         {pwError && <p className="error-msg">{pwError}</p>}
       </div>
-      <button className="btn-login" onClick={resetPassword}>비밀번호 재설정 완료</button>
+      <button className="btn-login" onClick={resetPassword} disabled={loading}>
+        {loading ? '처리 중...' : '비밀번호 재설정 완료'}
+      </button>
     </div>
   )
 
-  // ── 계정 삭제: 비밀번호 입력 ──
   if (view === 'deleteConfirm') return (
     <div className="login-wrap">
       <button className="btn-back" onClick={() => setView('main')}>← 설정으로</button>
@@ -218,13 +255,10 @@ export default function SettingsTab({ onLogout, onAccountDeleted, onPasswordRese
           className={`pw-input ${deletePwError ? 'error' : ''}`} />
         {deletePwError && <p className="error-msg">{deletePwError}</p>}
       </div>
-      <button className="btn-login" style={{ background: '#e74c3c' }} onClick={tryDelete}>
-        확인
-      </button>
+      <button className="btn-login" style={{ background: '#e74c3c' }} onClick={tryDelete}>확인</button>
     </div>
   )
 
-  // ── 계정 삭제: 최종 확인 ──
   if (view === 'deleteConfirm2') return (
     <div className="login-wrap" style={{ justifyContent: 'center', gap: 24 }}>
       <div style={{ textAlign: 'center' }}>
@@ -234,12 +268,13 @@ export default function SettingsTab({ onLogout, onAccountDeleted, onPasswordRese
       </div>
       <div style={{ display: 'flex', gap: 12 }}>
         <button className="btn-signup" style={{ flex: 1 }} onClick={() => setView('main')}>아니오</button>
-        <button className="btn-login" style={{ flex: 1, background: '#e74c3c' }} onClick={() => setView('deleted')}>예</button>
+        <button className="btn-login" style={{ flex: 1, background: '#e74c3c' }} onClick={confirmDelete} disabled={loading}>
+          {loading ? '삭제 중...' : '예'}
+        </button>
       </div>
     </div>
   )
 
-  // ── 계정 삭제 완료 ──
   return (
     <div className="login-wrap" style={{ justifyContent: 'center', alignItems: 'center', gap: 16, textAlign: 'center' }}>
       <p style={{ fontSize: '3rem' }}>✅</p>

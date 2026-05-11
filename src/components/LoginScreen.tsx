@@ -1,23 +1,38 @@
 import { useState } from 'react'
+import { api, setToken, storeUser, UserInfo } from '../api/client'
+import { reconnectSocket } from '../api/socket'
 
 interface Props {
   onSignup: () => void
   onForgot: () => void
-  onLogin: () => void
+  onLogin: (user: UserInfo) => void
 }
 
 export default function LoginScreen({ onSignup, onForgot, onLogin }: Props) {
   const [emailId, setEmailId] = useState('')
   const [password, setPassword] = useState('')
-  const [pwError, setPwError] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const handleLogin = () => {
-    if (password.length < 8) {
-      setPwError('비밀번호는 8자 이상이어야 해요.')
-      return
+  const handleLogin = async () => {
+    if (!emailId) { setError('이메일 아이디를 입력해주세요.'); return }
+    if (password.length < 8) { setError('비밀번호는 8자 이상이어야 해요.'); return }
+    setError('')
+    setLoading(true)
+    try {
+      const data = await api.post<{ token: string; user: UserInfo }>('/auth/login', {
+        email: emailId,
+        password,
+      })
+      setToken(data.token)
+      storeUser(data.user)
+      reconnectSocket()
+      onLogin(data.user)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : '로그인에 실패했습니다.')
+    } finally {
+      setLoading(false)
     }
-    setPwError('')
-    onLogin()
   }
 
   return (
@@ -31,7 +46,7 @@ export default function LoginScreen({ onSignup, onForgot, onLogin }: Props) {
             type="text"
             placeholder="아이디 입력"
             value={emailId}
-            onChange={e => setEmailId(e.target.value)}
+            onChange={e => { setEmailId(e.target.value); setError('') }}
             className="email-input"
           />
           <span className="email-domain">@suwon.ac.kr</span>
@@ -44,13 +59,16 @@ export default function LoginScreen({ onSignup, onForgot, onLogin }: Props) {
           type="password"
           placeholder="8자 이상 입력"
           value={password}
-          onChange={e => { setPassword(e.target.value); setPwError('') }}
-          className={`pw-input ${pwError ? 'error' : ''}`}
+          onChange={e => { setPassword(e.target.value); setError('') }}
+          className={`pw-input ${error ? 'error' : ''}`}
+          onKeyDown={e => e.key === 'Enter' && handleLogin()}
         />
-        {pwError && <p className="error-msg">{pwError}</p>}
+        {error && <p className="error-msg">{error}</p>}
       </div>
 
-      <button className="btn-login" onClick={handleLogin}>로그인</button>
+      <button className="btn-login" onClick={handleLogin} disabled={loading}>
+        {loading ? '로그인 중...' : '로그인'}
+      </button>
 
       <button className="btn-forgot" onClick={onForgot}>비밀번호를 잊으셨나요?</button>
 

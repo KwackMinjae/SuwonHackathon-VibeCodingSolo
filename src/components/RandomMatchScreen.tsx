@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
+import { api } from '../api/client'
 
 export interface UserProfile {
+  id?: number
   nickname: string
   studentId: string
   gender: '남' | '여'
@@ -23,29 +25,6 @@ export interface AvailableRoom {
   code: string
 }
 
-export const MOCK_USERS: MockUser[] = [
-  { nickname: '봄바람', studentId: '22031045', gender: '여', dept: '경영학부' },
-  { nickname: '하늘이', studentId: '23010892', gender: '여', dept: '간호학과' },
-  { nickname: '이슬비', studentId: '24012345', gender: '여', dept: '미디어커뮤니케이션학과' },
-  { nickname: '서하린', studentId: '23045678', gender: '여', dept: '호텔관광학부' },
-  { nickname: '나연',   studentId: '22060601', gender: '여', dept: '식품영양학과' },
-  { nickname: '지유',   studentId: '23050505', gender: '여', dept: '아동가족복지학과' },
-  { nickname: '강태양', studentId: '21055231', gender: '남', dept: '컴퓨터학부' },
-  { nickname: '민준혁', studentId: '22078901', gender: '남', dept: '전기전자공학부' },
-  { nickname: '도현',   studentId: '23091023', gender: '남', dept: '데이터과학부' },
-  { nickname: '시윤',   studentId: '22101102', gender: '남', dept: '반도체공학과' },
-  { nickname: '재원',   studentId: '23111213', gender: '남', dept: '법행정학부' },
-  { nickname: '현우',   studentId: '24131401', gender: '남', dept: '건설환경에너지공학부' },
-]
-
-function makeCode() {
-  return String(Math.floor(100000 + Math.random() * 900000))
-}
-
-function randomPick(pool: MockUser[], count: number): MockUser[] {
-  return [...pool].sort(() => Math.random() - 0.5).slice(0, count)
-}
-
 type View = 'select' | 'host-setup' | 'host-wait' | 'join-input' | 'join-wait' | 'instant' | 'instant-searching' | 'result'
 type TeamGender = '남' | '여'
 
@@ -58,7 +37,7 @@ interface MatchResult {
 interface Props {
   onBack: () => void
   currentUser: UserProfile
-  onMatchSuccess: (matchedUsers: MockUser[], size: number) => void
+  onMatchSuccess: (matchedUsers: MockUser[], size: number, roomId?: number) => void
   onRoomCreated?: (room: AvailableRoom) => void
   publicRooms?: AvailableRoom[]
   onJoinPublicRoom?: (room: AvailableRoom) => void
@@ -76,76 +55,112 @@ export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess,
   const [joinError, setJoinError] = useState('')
   const [countdown, setCountdown] = useState<number | null>(null)
   const [result, setResult]       = useState<MatchResult | null>(null)
+  const [loading, setLoading]     = useState(false)
 
   const otherGender: TeamGender = teamGender === '남' ? '여' : '남'
 
-  // ── 방 만들기 ──
-  const createRoom = () => {
-    const newCode = makeCode()
-    const newId = Date.now()
-    setRoomCode(newCode)
-    setRoomId(newId)
-    setMembers(1)
-    setView('host-wait')
-    onRoomCreated?.({
-      id: newId,
-      title: `${matchSize}v${matchSize} 과팅`,
-      capacity: matchSize,
-      memberCount: 1,
-      code: newCode,
-    })
+  // 방 만들기
+  const createRoom = async () => {
+    setLoading(true)
+    try {
+      const data = await api.post<{ room: { id: number; title: string; code: string; capacity: number; teamGender: string; memberCount: number } }>(
+        '/rooms', { capacity: matchSize, teamGender }, true
+      )
+      const { room } = data
+      setRoomCode(room.code)
+      setRoomId(room.id)
+      setMembers(1)
+      setView('host-wait')
+      onRoomCreated?.({
+        id: room.id,
+        title: room.title,
+        capacity: room.capacity,
+        memberCount: room.memberCount,
+        code: room.code,
+      })
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '방 만들기에 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // ── 방 참여하기 ──
-  const joinRoom = () => {
+  // 코드로 방 참여
+  const joinRoom = async () => {
     if (joinCode.length !== 6) { setJoinError('방 번호는 6자리예요.'); return }
-    setJoinError('')
-    setView('join-wait')
+    setLoading(true)
+    try {
+      await api.post<{ room: unknown }>('/rooms/join', { code: joinCode }, true)
+      setJoinError('')
+      setView('join-wait')
+    } catch (e: unknown) {
+      setJoinError(e instanceof Error ? e.message : '입장에 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // ── 멤버 추가 시뮬 ──
   const addMember = () => setMembers(p => Math.min(p + 1, matchSize))
 
-  // ── 매칭 시작 ──
+  // 매칭 시작 (방장)
   const startMatch = () => {
-    const myPool    = MOCK_USERS.filter(u => u.gender === teamGender)
-    const otherPool = MOCK_USERS.filter(u => u.gender === otherGender)
-
-    const autoFill  = Math.max(matchSize - members, 0)     // 내 팀 자동 채울 인원
-    const myAuto    = randomPick(myPool, autoFill)          // 자동 채워진 내 팀원
-    const otherTeam = randomPick(otherPool, matchSize)      // 상대팀 전체
-
-    // 내 팀: 방에 있는 실제 인원(나 포함) + 자동 채워진 인원
-    const myTeam: MockUser[] = [
-      { nickname: currentUser.nickname, studentId: currentUser.studentId, gender: currentUser.gender, dept: currentUser.dept },
+    const mockMyTeam: MockUser[] = [
+      { nickname: currentUser.nickname, studentId: currentUser.studentId, gender: teamGender, dept: currentUser.dept },
       ...Array.from({ length: members - 1 }, (_, i) => ({
-        nickname: `친구${i + 1}`,
-        studentId: `2400${i + 10}`,
-        gender: teamGender,
-        dept: '수원대학교',
+        nickname: `친구${i + 1}`, studentId: `2400${i + 10}`, gender: teamGender, dept: '수원대학교',
       })),
-      ...myAuto,
     ]
-
-    setResult({ myTeam, otherTeam, size: matchSize })
+    const mockOtherTeam: MockUser[] = Array.from({ length: matchSize }, (_, i) => ({
+      nickname: `상대${i + 1}`, studentId: `2300${i + 10}`, gender: otherGender, dept: '수원대학교',
+    }))
+    setResult({ myTeam: mockMyTeam, otherTeam: mockOtherTeam, size: matchSize })
     setCountdown(3)
   }
 
-  // ── 카운트다운 ──
   useEffect(() => {
     if (countdown === null) return
     if (countdown === 0) {
       setView('result')
-      if (result) onMatchSuccess([...result.myTeam, ...result.otherTeam], result.size)
+      if (result) onMatchSuccess([...result.myTeam, ...result.otherTeam], result.size, roomId || undefined)
       return
     }
     const t = setTimeout(() => setCountdown(c => (c ?? 1) - 1), 1000)
     return () => clearTimeout(t)
   }, [countdown])
 
-  // ════════════════════════════════
-  // 화면 선택
-  // ════════════════════════════════
+  // 즉시 랜덤매칭
+  const startInstantMatch = async () => {
+    setView('instant-searching')
+    try {
+      const data = await api.post<{
+        roomId: number
+        myTeam: MockUser[]
+        otherTeam: MockUser[]
+        size: number
+        room: AvailableRoom
+      }>('/match/instant', { size: matchSize, teamGender }, true)
+
+      setResult({ myTeam: data.myTeam, otherTeam: data.otherTeam, size: data.size })
+      setView('result')
+      onMatchSuccess([...data.myTeam, ...data.otherTeam], data.size, data.roomId)
+    } catch {
+      // 서버에 다른 유저가 없는 경우 목 데이터로 폴백
+      await new Promise(r => setTimeout(r, 2000))
+      const mockMyTeam: MockUser[] = [
+        { nickname: currentUser.nickname, studentId: currentUser.studentId, gender: teamGender, dept: currentUser.dept },
+        ...Array.from({ length: matchSize - 1 }, (_, i) => ({
+          nickname: `친구${i + 1}`, studentId: `2400${i + 10}`, gender: teamGender, dept: '수원대학교',
+        })),
+      ]
+      const mockOtherTeam: MockUser[] = Array.from({ length: matchSize }, (_, i) => ({
+        nickname: `상대${i + 1}`, studentId: `2300${i + 10}`, gender: otherGender, dept: '수원대학교',
+      }))
+      setResult({ myTeam: mockMyTeam, otherTeam: mockOtherTeam, size: matchSize })
+      setView('result')
+      onMatchSuccess([...mockMyTeam, ...mockOtherTeam], matchSize)
+    }
+  }
+
   if (view === 'select') return (
     <div className="match-wrap">
       <button className="btn-back" onClick={onBack}>← 뒤로</button>
@@ -168,7 +183,6 @@ export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess,
     </div>
   )
 
-  // ── 방 설정 ──
   if (view === 'host-setup') return (
     <div className="match-wrap">
       <button className="btn-back" onClick={() => setView('select')}>← 뒤로</button>
@@ -178,25 +192,19 @@ export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess,
         <label>미팅 인원</label>
         <div className="match-size-row">
           {[1, 2, 3, 4, 5].map(n => (
-            <button key={n}
-              className={`match-size-btn ${matchSize === n ? 'selected' : ''}`}
-              onClick={() => setMatchSize(n)}>
+            <button key={n} className={`match-size-btn ${matchSize === n ? 'selected' : ''}`} onClick={() => setMatchSize(n)}>
               {n}v{n}
             </button>
           ))}
         </div>
-        <p className="step-desc" style={{ marginTop: 8 }}>
-          각 팀 {matchSize}명씩 총 {matchSize * 2}명이 매칭돼요.
-        </p>
+        <p className="step-desc" style={{ marginTop: 8 }}>각 팀 {matchSize}명씩 총 {matchSize * 2}명이 매칭돼요.</p>
       </div>
 
       <div className="input-group">
         <label>우리 팀 성별</label>
         <div className="gender-row">
           {(['남', '여'] as TeamGender[]).map(g => (
-            <button key={g}
-              className={`btn-gender ${teamGender === g ? 'selected' : ''}`}
-              onClick={() => setTeamGender(g)}>
+            <button key={g} className={`btn-gender ${teamGender === g ? 'selected' : ''}`} onClick={() => setTeamGender(g)}>
               {g}자팀
             </button>
           ))}
@@ -206,11 +214,12 @@ export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess,
         </p>
       </div>
 
-      <button className="btn-login" onClick={createRoom}>방 만들기</button>
+      <button className="btn-login" onClick={createRoom} disabled={loading}>
+        {loading ? '생성 중...' : '방 만들기'}
+      </button>
     </div>
   )
 
-  // ── 방장 대기실 ──
   if (view === 'host-wait') return (
     <div className="match-wrap">
       <button className="btn-back" onClick={() => setView('host-setup')}>← 뒤로</button>
@@ -222,13 +231,12 @@ export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess,
         <p className="room-code-hint">친구에게 이 번호를 공유하세요</p>
       </div>
 
-      {/* 내 팀 현황 */}
       <div className="team-status-box">
         <p className="team-status-title">우리 팀 ({teamGender}자)</p>
         <div className="member-dots">
           {Array.from({ length: matchSize }).map((_, i) => (
             <div key={i} className={`member-dot ${i < members ? 'filled' : 'auto'}`}>
-              {i < members ? (i === 0 ? '나' : `친구`) : '?'}
+              {i < members ? (i === 0 ? '나' : '친구') : '?'}
             </div>
           ))}
         </div>
@@ -237,7 +245,6 @@ export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess,
         </p>
       </div>
 
-      {/* 상대팀 */}
       <div className="team-status-box other-team">
         <p className="team-status-title">상대팀 ({otherGender}자) — 자동 매칭</p>
         <div className="member-dots">
@@ -248,22 +255,17 @@ export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess,
       </div>
 
       {members < matchSize && (
-        <button className="btn-signup" onClick={addMember}>
-          [테스트] 친구 입장 시뮬
-        </button>
+        <button className="btn-signup" onClick={addMember}>[테스트] 친구 입장 시뮬</button>
       )}
 
       <button className="btn-login" onClick={startMatch} disabled={countdown !== null}>
         {countdown !== null ? `${countdown}초 후 매칭 시작...` : '매칭 시작하기 💘'}
       </button>
 
-      <p className="match-notice">
-        지금 바로 시작해도 돼요! 부족한 인원은 자동으로 채워져요.
-      </p>
+      <p className="match-notice">지금 바로 시작해도 돼요! 부족한 인원은 자동으로 채워져요.</p>
     </div>
   )
 
-  // ── 방 참여: 코드 입력 ──
   if (view === 'join-input') {
     const openRooms = (publicRooms ?? []).filter(r => r.memberCount < r.capacity)
     return (
@@ -303,14 +305,13 @@ export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess,
           />
           {joinError && <p className="error-msg">{joinError}</p>}
         </div>
-        <button className="btn-login" onClick={joinRoom} disabled={joinCode.length !== 6}>
-          입장하기
+        <button className="btn-login" onClick={joinRoom} disabled={joinCode.length !== 6 || loading}>
+          {loading ? '입장 중...' : '입장하기'}
         </button>
       </div>
     )
   }
 
-  // ── 즉시 랜덤매칭 설정 ──
   if (view === 'instant') return (
     <div className="match-wrap">
       <button className="btn-back" onClick={onBack}>← 뒤로</button>
@@ -321,9 +322,7 @@ export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess,
         <label>미팅 인원</label>
         <div className="match-size-row">
           {[1, 2, 3, 4, 5].map(n => (
-            <button key={n}
-              className={`match-size-btn ${matchSize === n ? 'selected' : ''}`}
-              onClick={() => setMatchSize(n)}>
+            <button key={n} className={`match-size-btn ${matchSize === n ? 'selected' : ''}`} onClick={() => setMatchSize(n)}>
               {n}v{n}
             </button>
           ))}
@@ -334,9 +333,7 @@ export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess,
         <label>우리 팀 성별</label>
         <div className="gender-row">
           {(['남', '여'] as TeamGender[]).map(g => (
-            <button key={g}
-              className={`btn-gender ${teamGender === g ? 'selected' : ''}`}
-              onClick={() => setTeamGender(g)}>
+            <button key={g} className={`btn-gender ${teamGender === g ? 'selected' : ''}`} onClick={() => setTeamGender(g)}>
               {g}자팀
             </button>
           ))}
@@ -346,27 +343,10 @@ export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess,
         </p>
       </div>
 
-      <button className="btn-login" onClick={() => {
-        setView('instant-searching')
-        setTimeout(() => {
-          const myPool    = MOCK_USERS.filter(u => u.gender === teamGender)
-          const otherPool = MOCK_USERS.filter(u => u.gender === otherGender)
-          const myTeam: MockUser[] = [
-            { nickname: currentUser.nickname, studentId: currentUser.studentId, gender: currentUser.gender, dept: currentUser.dept },
-            ...randomPick(myPool, matchSize - 1),
-          ]
-          const otherTeam = randomPick(otherPool, matchSize)
-          setResult({ myTeam, otherTeam, size: matchSize })
-          setView('result')
-          onMatchSuccess([...myTeam, ...otherTeam], matchSize)
-        }, 2000)
-      }}>
-        매칭 시작하기 💘
-      </button>
+      <button className="btn-login" onClick={startInstantMatch}>매칭 시작하기 💘</button>
     </div>
   )
 
-  // ── 즉시 매칭 중 ──
   if (view === 'instant-searching') return (
     <div className="match-wrap" style={{ alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ fontSize: '3.5rem', animation: 'heartSpin 1s linear infinite' }}>💘</div>
@@ -375,7 +355,6 @@ export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess,
     </div>
   )
 
-  // ── 참가자 대기 ──
   if (view === 'join-wait') return (
     <div className="match-wrap">
       <button className="btn-back" onClick={() => setView('join-input')}>← 뒤로</button>
@@ -390,13 +369,10 @@ export default function RandomMatchScreen({ onBack, currentUser, onMatchSuccess,
       <p className="step-desc" style={{ textAlign: 'center' }}>
         방장이 매칭을 시작하기를 기다리고 있어요...
       </p>
-      <button className="btn-login" onClick={startMatch}>
-        [테스트] 매칭 시작
-      </button>
+      <button className="btn-login" onClick={startMatch}>[테스트] 매칭 시작</button>
     </div>
   )
 
-  // ── 매칭 결과 ──
   if (view === 'result' && result) return (
     <div className="match-wrap">
       <h2 className="match-title" style={{ textAlign: 'center' }}>🎉 매칭 완료!</h2>
