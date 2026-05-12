@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
-import * as brevo from '@getbrevo/brevo'
 import db from '../db'
 import { signToken } from '../middleware/auth'
 
@@ -15,27 +14,34 @@ async function sendVerificationEmail(to: string, code: string) {
   const from = process.env.MAIL_FROM || 'bongdamsignal@gmail.com'
   if (!apiKey) throw new Error('BREVO_API_KEY 환경변수를 설정해주세요.')
 
-  const defaultClient = brevo.ApiClient.instance
-  defaultClient.authentications['api-key'].apiKey = apiKey
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      sender: { email: from, name: '수원시그널' },
+      to: [{ email: to }],
+      subject: '[수원시그널] 이메일 인증번호',
+      textContent: `인증번호: ${code}\n\n이 코드는 10분간 유효합니다.`,
+      htmlContent: `
+        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;border:1px solid #eee;border-radius:12px">
+          <h2 style="color:#1a8fa0;margin-bottom:8px">수원시그널</h2>
+          <p style="color:#444;margin-bottom:24px">아래 인증번호를 입력해주세요. <strong>10분</strong> 이내에 사용해야 합니다.</p>
+          <div style="background:#f0f9fa;border-radius:8px;padding:24px;text-align:center;letter-spacing:8px;font-size:32px;font-weight:bold;color:#1a8fa0">
+            ${code}
+          </div>
+          <p style="color:#999;font-size:12px;margin-top:24px">본인이 요청하지 않은 경우 이 메일을 무시하세요.</p>
+        </div>
+      `,
+    }),
+  })
 
-  const client = new brevo.TransactionalEmailsApi()
-  const email = new brevo.SendSmtpEmail()
-
-  email.sender = { email: from, name: '수원시그널' }
-  email.to = [{ email: to }]
-  email.subject = '[수원시그널] 이메일 인증번호'
-  email.textContent = `인증번호: ${code}\n\n이 코드는 10분간 유효합니다.`
-  email.htmlContent = `
-    <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;border:1px solid #eee;border-radius:12px">
-      <h2 style="color:#1a8fa0;margin-bottom:8px">수원시그널</h2>
-      <p style="color:#444;margin-bottom:24px">아래 인증번호를 입력해주세요. <strong>10분</strong> 이내에 사용해야 합니다.</p>
-      <div style="background:#f0f9fa;border-radius:8px;padding:24px;text-align:center;letter-spacing:8px;font-size:32px;font-weight:bold;color:#1a8fa0">
-        ${code}
-      </div>
-      <p style="color:#999;font-size:12px;margin-top:24px">본인이 요청하지 않은 경우 이 메일을 무시하세요.</p>
-    </div>
-  `
-  await client.sendTransacEmail(email)
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`Brevo API 오류: ${err}`)
+  }
 }
 
 // 인증코드 전송
