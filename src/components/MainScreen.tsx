@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import SettingsTab from './SettingsTab'
 import { ChatList, ChatRoomView, ChatRoom, ChatMessage } from './ChatScreen'
-import RandomMatchScreen, { UserProfile, MockUser, SeekingInfo } from './RandomMatchScreen'
+import RandomMatchScreen, { UserProfile, MockUser, TeamState, MatchStartedPayload } from './RandomMatchScreen'
 import { api } from '../api/client'
+import { getSocket } from '../api/socket'
 
 type Tab = '과팅' | '채팅방' | '설정'
 type SubScreen = null | 'random-create' | 'random-join' | 'chatroom'
@@ -35,7 +36,7 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
   const [sub, setSub]           = useState<SubScreen>(null)
   const [chatRooms, setChatRooms]   = useState<ChatRoom[]>([])
   const [activeRoom, setActiveRoom] = useState<ChatRoom | null>(null)
-  const [seekingInfo, setSeekingInfo] = useState<SeekingInfo | null>(null)
+  const [teamState, setTeamState]   = useState<TeamState | null>(null)
 
   const handleMatchSuccess = (matchedUsers: MockUser[], size: number, roomId?: number) => {
     const t = nowTime()
@@ -68,10 +69,45 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
     }
     setChatRooms(prev => [...prev, newRoom])
     setActiveRoom(newRoom)
-    setSeekingInfo(null)
+    setTeamState(null)
     setSub('chatroom')
     setTab('채팅방')
   }
+
+  // 백그라운드에서 매칭 이벤트 수신 (RandomMatchScreen이 unmount된 상태일 때)
+  useEffect(() => {
+    if (!teamState) return
+    if (sub === 'random-create' || sub === 'random-join') return
+
+    const socket = getSocket()
+    socket.emit('join-room', teamState.roomId)
+
+    const onMatchStarted = (data: MatchStartedPayload) => {
+      const myGender = currentUser.gender
+      const matchedUsers = data.members
+        .filter(m => m.id !== currentUser.id)
+        .map(m => ({
+          id: m.id,
+          nickname: m.nickname,
+          studentId: m.student_id || '',
+          gender: m.gender as '남' | '여',
+          dept: m.dept,
+        }))
+      handleMatchSuccess(matchedUsers, data.size, data.roomId)
+    }
+
+    const onMatchSeeking = () => {
+      setTeamState(prev => prev ? { ...prev, isSeeking: true } : prev)
+    }
+
+    socket.on('match-started', onMatchStarted)
+    socket.on('match-seeking', onMatchSeeking)
+
+    return () => {
+      socket.off('match-started', onMatchStarted)
+      socket.off('match-seeking', onMatchSeeking)
+    }
+  }, [teamState?.roomId, sub])
 
   const handleOpenRoom = (room: ChatRoom) => {
     setActiveRoom(room)
@@ -128,20 +164,42 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
     setTab('채팅방')
   }
 
+  const handleGoToMain = (state: TeamState) => {
+    setTeamState(state)
+    setSub(null)
+  }
+
+  const handleCancelTeam = async () => {
+    if (!teamState) return
+    const socket = getSocket()
+    if (teamState.isSeeking && teamState.isHost) {
+      socket.emit('cancel-match', { roomId: teamState.roomId })
+    }
+    try {
+      await api.del(`/rooms/${teamState.roomId}/leave`, {}, true)
+    } catch { /* ignore */ }
+    setTeamState(null)
+  }
+
+  const handleResumeTeam = () => {
+    if (!teamState) return
+    setSub('random-create')
+  }
+
   if (sub === 'random-create') return (
     <RandomMatchScreen
-      onBack={() => setSub(null)}
+      onBack={() => { setTeamState(null); setSub(null) }}
+      onGoToMain={handleGoToMain}
       currentUser={currentUser}
       onMatchSuccess={handleMatchSuccess}
-      onSeekingStarted={info => setSeekingInfo(info)}
-      onSeekingEnded={() => setSeekingInfo(null)}
-      seekingResume={seekingInfo ?? undefined}
+      teamStateResume={teamState ?? undefined}
       initialView="host-setup"
     />
   )
   if (sub === 'random-join') return (
     <RandomMatchScreen
       onBack={() => setSub(null)}
+      onGoToMain={handleGoToMain}
       currentUser={currentUser}
       onMatchSuccess={handleMatchSuccess}
       initialView="join-input"
@@ -169,11 +227,8 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
       <div className="main-content">
         {tab === '과팅'  && (
           <GatingTab
-            onCreate={() => setSub('random-create')}
+            onCreate={() => { setTeamState(null); setSub('random-create') }}
             onJoin={() => setSub('random-join')}
-            seekingInfo={seekingInfo}
-            onResumeSeek={() => setSub('random-create')}
-            onCancelSeek={() => setSeekingInfo(null)}
           />
         )}
         {tab === '채팅방' && <ChatList rooms={chatRooms} onOpenRoom={handleOpenRoom} />}
@@ -198,6 +253,61 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
           </button>
         ))}
       </nav>
+
+      {/* 팀 대기/매칭 중 팝업 */}
+      {teamState && (
+        <div
+          onClick={handleResumeTeam}
+          style={{
+            position: 'fixed',
+            bottom: 70,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 'calc(100% - 32px)',
+            maxWidth: 390,
+            background: teamState.isSeeking
+              ? 'linear-gradient(135deg, #ff6b9d, #ff8c69)'
+              : 'linear-gradient(135deg, #5b87ff, #7b6fff)',
+            borderRadius: 16,
+            padding: '14px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            cursor: 'pointer',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
+            zIndex: 200,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: '1.5rem', animation: teamState.isSeeking ? 'heartSpin 1s linear infinite' : 'none' }}>
+              {teamState.isSeeking ? '💘' : '🏠'}
+            </span>
+            <div>
+              <p style={{ margin: 0, fontWeight: 700, color: '#fff', fontSize: '0.95rem' }}>
+                {teamState.isSeeking ? '매칭 중...' : '팀 대기 중'}
+              </p>
+              <p style={{ margin: 0, color: 'rgba(255,255,255,0.85)', fontSize: '0.78rem' }}>
+                코드 {teamState.roomCode} · {teamState.matchSize}v{teamState.matchSize} · 탭해서 돌아가기
+              </p>
+            </div>
+          </div>
+          <button
+            style={{
+              background: 'rgba(255,255,255,0.22)',
+              border: 'none',
+              color: '#fff',
+              borderRadius: 8,
+              padding: '5px 12px',
+              fontSize: '0.78rem',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+            onClick={e => { e.stopPropagation(); handleCancelTeam() }}
+          >
+            나가기
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -222,52 +332,12 @@ function navIcon(tab: Tab) {
   )
 }
 
-interface GatingTabProps {
-  onCreate: () => void
-  onJoin: () => void
-  seekingInfo: SeekingInfo | null
-  onResumeSeek: () => void
-  onCancelSeek: () => void
-}
-
-function GatingTab({ onCreate, onJoin, seekingInfo, onResumeSeek, onCancelSeek }: GatingTabProps) {
+function GatingTab({ onCreate, onJoin }: { onCreate: () => void; onJoin: () => void }) {
   return (
     <div className="gating-tab">
       <div className="gating-header">
         <p className="gating-subtitle">설레는 과팅을 시작해보세요 💙</p>
       </div>
-
-      {seekingInfo && (
-        <div
-          style={{
-            background: 'linear-gradient(135deg, #ff6b9d, #ff8c69)',
-            borderRadius: 14,
-            padding: '14px 18px',
-            marginBottom: 16,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            cursor: 'pointer',
-            boxShadow: '0 2px 12px rgba(255,107,157,0.25)',
-          }}
-          onClick={onResumeSeek}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: '1.4rem', animation: 'heartSpin 1s linear infinite' }}>💘</span>
-            <div>
-              <p style={{ margin: 0, fontWeight: 700, color: '#fff', fontSize: '0.95rem' }}>매칭 중...</p>
-              <p style={{ margin: 0, color: 'rgba(255,255,255,0.85)', fontSize: '0.78rem' }}>탭해서 매칭 화면으로</p>
-            </div>
-          </div>
-          <button
-            style={{ background: 'rgba(255,255,255,0.25)', border: 'none', color: '#fff', borderRadius: 8, padding: '4px 10px', fontSize: '0.78rem', cursor: 'pointer' }}
-            onClick={e => { e.stopPropagation(); onCancelSeek() }}
-          >
-            취소
-          </button>
-        </div>
-      )}
-
       <div className="gating-cards">
         <button className="gating-card card-notice" onClick={onCreate}>
           <div className="card-icon">🏠</div>

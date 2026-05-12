@@ -26,13 +26,15 @@ export interface AvailableRoom {
   code: string
 }
 
-export interface SeekingInfo {
+export interface TeamState {
   roomId: number
-  matchSize: number
   roomCode: string
+  matchSize: number
+  isHost: boolean
+  isSeeking: boolean
 }
 
-type View = 'host-setup' | 'host-wait' | 'host-seeking' | 'join-input' | 'join-wait' | 'result'
+type View = 'host-setup' | 'host-wait' | 'seeking' | 'join-input' | 'join-wait' | 'result'
 
 interface MatchResult {
   myTeam: MockUser[]
@@ -40,7 +42,7 @@ interface MatchResult {
   size: number
 }
 
-interface MatchStartedPayload {
+export interface MatchStartedPayload {
   roomId: number
   members: { id: number; nickname: string; gender: string; dept: string; email: string; student_id: string }[]
   size: number
@@ -49,43 +51,47 @@ interface MatchStartedPayload {
 
 interface Props {
   onBack: () => void
+  onGoToMain: (state: TeamState) => void
   currentUser: UserProfile
   onMatchSuccess: (matchedUsers: MockUser[], size: number, roomId?: number) => void
   onRoomCreated?: (room: AvailableRoom) => void
-  onSeekingStarted?: (info: SeekingInfo) => void
-  onSeekingEnded?: () => void
-  seekingResume?: SeekingInfo
+  teamStateResume?: TeamState
   initialView?: View
 }
 
 export default function RandomMatchScreen({
   onBack,
+  onGoToMain,
   currentUser,
   onMatchSuccess,
   onRoomCreated,
-  onSeekingStarted,
-  onSeekingEnded,
-  seekingResume,
+  teamStateResume,
   initialView = 'host-setup',
 }: Props) {
-  const [view, setView]         = useState<View>(seekingResume ? 'host-seeking' : initialView)
-  const [matchSize, setMatchSize] = useState(seekingResume?.matchSize ?? 3)
-  const [roomCode, setRoomCode] = useState(seekingResume?.roomCode ?? '')
-  const [roomId, setRoomId]     = useState(seekingResume?.roomId ?? 0)
+  const getInitialView = (): View => {
+    if (!teamStateResume) return initialView
+    if (teamStateResume.isSeeking) return 'seeking'
+    return teamStateResume.isHost ? 'host-wait' : 'join-wait'
+  }
+
+  const [view, setView]         = useState<View>(getInitialView)
+  const [matchSize, setMatchSize] = useState(teamStateResume?.matchSize ?? 3)
+  const [roomCode, setRoomCode] = useState(teamStateResume?.roomCode ?? '')
+  const [roomId, setRoomId]     = useState(teamStateResume?.roomId ?? 0)
+  const [isHostOfRoom, setIsHostOfRoom] = useState(teamStateResume?.isHost ?? true)
   const [myTeamMembers, setMyTeamMembers] = useState<string[]>([currentUser.nickname])
   const [hostId, setHostId]     = useState<number>(currentUser.id ?? 0)
-  const [joinCode, setJoinCode] = useState('')
+  const [joinCode, setJoinCode] = useState(teamStateResume?.isHost === false ? (teamStateResume?.roomCode ?? '') : '')
   const [joinError, setJoinError] = useState('')
   const [joinRoomMembers, setJoinRoomMembers] = useState<string[]>([])
-  const [joinRoomCapacity, setJoinRoomCapacity] = useState(0)
+  const [joinRoomCapacity, setJoinRoomCapacity] = useState(teamStateResume?.matchSize ?? 0)
   const [joinRoomHostId, setJoinRoomHostId] = useState<number>(0)
   const [result, setResult]     = useState<MatchResult | null>(null)
   const [loading, setLoading]   = useState(false)
-  const [kickingId, setKickingId] = useState<number | null>(null)
+  const [kickingIdx, setKickingIdx] = useState<number | null>(null)
 
   const myGender = currentUser.gender
   const otherGender: '남' | '여' = myGender === '남' ? '여' : '남'
-  const isHost = currentUser.id === hostId
 
   const toMockUser = (m: MatchStartedPayload['members'][0]): MockUser => ({
     id: m.id,
@@ -100,12 +106,11 @@ export default function RandomMatchScreen({
     const otherTeam = data.members.filter(m => m.gender !== myGender).map(toMockUser)
     setResult({ myTeam, otherTeam, size: data.size })
     setView('result')
-    onSeekingEnded?.()
     const others = data.members.filter(m => m.id !== currentUser.id).map(toMockUser)
     onMatchSuccess(others, data.size, data.roomId)
-  }, [currentUser, onMatchSuccess, onSeekingEnded, myGender])
+  }, [currentUser, onMatchSuccess, myGender])
 
-  // host-wait: 소켓으로 실시간 멤버 변경 수신
+  // host-wait 소켓
   useEffect(() => {
     if (view !== 'host-wait' || roomId === 0) return
     const socket = getSocket()
@@ -124,14 +129,8 @@ export default function RandomMatchScreen({
       if (data.hostId) setHostId(data.hostId)
     }
     const onMatchStarted = (data: MatchStartedPayload) => processMatchResult(data)
-    const onMatchSeeking = () => {
-      setView('host-seeking')
-      onSeekingStarted?.({ roomId, matchSize, roomCode })
-    }
-    const onKicked = () => {
-      alert('방에서 추방되었습니다.')
-      onBack()
-    }
+    const onMatchSeeking = () => setView('seeking')
+    const onKicked = () => { alert('방에서 추방되었습니다.'); onBack() }
 
     socket.on('member-joined', onMemberJoined)
     socket.on('match-started', onMatchStarted)
@@ -145,11 +144,11 @@ export default function RandomMatchScreen({
       socket.off('kicked-from-room', onKicked)
       socket.emit('leave-room', roomId)
     }
-  }, [view, roomId, processMatchResult, currentUser.nickname, onSeekingStarted, matchSize, roomCode, onBack])
+  }, [view, roomId, processMatchResult, currentUser.nickname, onBack])
 
-  // host-seeking: 매칭 대기 중
+  // seeking 소켓 (host + 팀원 공통)
   useEffect(() => {
-    if (view !== 'host-seeking' || roomId === 0) return
+    if (view !== 'seeking' || roomId === 0) return
     const socket = getSocket()
     socket.emit('join-room', roomId)
     const onMatchStarted = (data: MatchStartedPayload) => processMatchResult(data)
@@ -159,7 +158,7 @@ export default function RandomMatchScreen({
     }
   }, [view, roomId, processMatchResult])
 
-  // join-wait: 실시간 멤버 수신
+  // join-wait 소켓
   useEffect(() => {
     if (view !== 'join-wait' || roomId === 0) return
     const socket = getSocket()
@@ -178,18 +177,18 @@ export default function RandomMatchScreen({
       if (data.hostId) setJoinRoomHostId(data.hostId)
     }
     const onMatchStarted = (data: MatchStartedPayload) => processMatchResult(data)
-    const onKicked = () => {
-      alert('방에서 추방되었습니다.')
-      setView('join-input')
-    }
+    const onMatchSeeking = () => setView('seeking')  // 팀원도 매칭 대기 화면 진입
+    const onKicked = () => { alert('방에서 추방되었습니다.'); setView('join-input') }
 
     socket.on('member-joined', onMemberJoined)
     socket.on('match-started', onMatchStarted)
+    socket.on('match-seeking', onMatchSeeking)
     socket.on('kicked-from-room', onKicked)
 
     return () => {
       socket.off('member-joined', onMemberJoined)
       socket.off('match-started', onMatchStarted)
+      socket.off('match-seeking', onMatchSeeking)
       socket.off('kicked-from-room', onKicked)
       socket.emit('leave-room', roomId)
     }
@@ -205,6 +204,7 @@ export default function RandomMatchScreen({
       setRoomCode(room.code)
       setRoomId(room.id)
       setHostId(currentUser.id ?? 0)
+      setIsHostOfRoom(true)
       setMyTeamMembers([currentUser.nickname])
       setView('host-wait')
       onRoomCreated?.({ id: room.id, title: room.title, capacity: room.capacity, memberCount: room.memberCount, code: room.code })
@@ -222,7 +222,10 @@ export default function RandomMatchScreen({
       const data = await api.post<{ room: { id: number; capacity: number; hostId: number } }>('/rooms/join', { code: joinCode }, true)
       setRoomId(data.room.id)
       setJoinRoomCapacity(data.room.capacity)
+      setMatchSize(data.room.capacity)
       setJoinRoomHostId(data.room.hostId)
+      setRoomCode(joinCode)
+      setIsHostOfRoom(false)
       setJoinError('')
       setView('join-wait')
     } catch (e: unknown) {
@@ -237,17 +240,35 @@ export default function RandomMatchScreen({
     socket.emit('start-match', { roomId })
   }
 
-  const handleCancelMatch = () => {
+  const handleCancelMatch = async () => {
     const socket = getSocket()
     socket.emit('cancel-match', { roomId })
-    onSeekingEnded?.()
     setView('host-wait')
   }
 
-  const handleKick = async (memberNickname: string, memberIdx: number) => {
-    // 멤버 목록에서 id를 찾아야 하므로 서버에서 다시 조회
+  const handleLeaveRoom = async () => {
     try {
-      setKickingId(memberIdx)
+      if (view === 'seeking' && isHostOfRoom) {
+        getSocket().emit('cancel-match', { roomId })
+      }
+      await api.del(`/rooms/${roomId}/leave`, {}, true)
+    } catch { /* ignore */ }
+    onBack()
+  }
+
+  const handleGoToMain = () => {
+    onGoToMain({
+      roomId,
+      roomCode: view === 'join-wait' ? joinCode : roomCode,
+      matchSize,
+      isHost: isHostOfRoom,
+      isSeeking: view === 'seeking',
+    })
+  }
+
+  const handleKick = async (memberNickname: string, idx: number) => {
+    try {
+      setKickingIdx(idx)
       const data = await api.get<{ room: { members: { id: number; nickname: string }[] } }>(`/rooms/${roomId}`, true)
       const target = data.room.members.find(m => m.nickname === memberNickname)
       if (!target) return
@@ -255,7 +276,7 @@ export default function RandomMatchScreen({
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : '추방에 실패했습니다.')
     } finally {
-      setKickingId(null)
+      setKickingIdx(null)
     }
   }
 
@@ -296,7 +317,15 @@ export default function RandomMatchScreen({
 
   if (view === 'host-wait') return (
     <div className="match-wrap">
-      <button className="btn-back" onClick={onBack}>← 뒤로</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <button className="btn-back" style={{ position: 'static', margin: 0 }} onClick={handleLeaveRoom}>← 방 나가기</button>
+        <button
+          style={{ background: 'none', border: 'none', color: '#888', fontSize: '0.82rem', cursor: 'pointer' }}
+          onClick={handleGoToMain}
+        >
+          메인화면으로 →
+        </button>
+      </div>
       <h2 className="match-title">대기 중</h2>
 
       <div className="room-code-box">
@@ -319,18 +348,18 @@ export default function RandomMatchScreen({
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
           {myTeamMembers.map((name, i) => {
             const isMe = name === currentUser.nickname
-            const isThisHost = currentUser.id === hostId ? isMe : (i === 0)
+            const isThisHost = i === 0
             return (
               <div key={i} style={{ fontSize: '0.88rem', color: '#444', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span>{isThisHost ? '👑' : '✓'}</span>
                 <span style={{ flex: 1 }}>{name}{isMe ? ' (나)' : ''}</span>
-                {isHost && !isMe && (
+                {isHostOfRoom && !isMe && (
                   <button
                     style={{ fontSize: '0.75rem', color: '#e55', background: 'none', border: '1px solid #e55', borderRadius: 4, padding: '2px 6px', cursor: 'pointer' }}
                     onClick={() => handleKick(name, i)}
-                    disabled={kickingId === i}
+                    disabled={kickingIdx === i}
                   >
-                    {kickingId === i ? '...' : '추방'}
+                    {kickingIdx === i ? '...' : '추방'}
                   </button>
                 )}
               </div>
@@ -353,29 +382,41 @@ export default function RandomMatchScreen({
         </div>
       </div>
 
-      {isHost && (
+      {isHostOfRoom ? (
         <button className="btn-login" onClick={handleStartMatch}>
           매칭 시작하기 💘
         </button>
-      )}
-      {!isHost && (
-        <p className="step-desc" style={{ textAlign: 'center' }}>방장이 매칭을 시작하면 자동으로 연결됩니다.</p>
+      ) : (
+        <p className="step-desc" style={{ textAlign: 'center', marginTop: 12 }}>
+          방장이 매칭을 시작하면 자동으로 연결됩니다.
+        </p>
       )}
     </div>
   )
 
-  if (view === 'host-seeking') return (
+  if (view === 'seeking') return (
     <div className="match-wrap" style={{ alignItems: 'center', justifyContent: 'center', gap: 20 }}>
       <div style={{ fontSize: '3.5rem', animation: 'heartSpin 1s linear infinite' }}>💘</div>
       <h2 className="match-title" style={{ textAlign: 'center' }}>상대팀을 찾고 있어요...</h2>
       <p className="step-desc" style={{ textAlign: 'center' }}>
         {otherGender}자팀이 준비되면<br />자동으로 매칭돼요!
       </p>
-      <button className="btn-signup" onClick={handleCancelMatch} style={{ marginTop: 8 }}>
-        매칭 취소
+      {isHostOfRoom && (
+        <button className="btn-signup" onClick={handleCancelMatch} style={{ marginTop: 8 }}>
+          매칭 취소
+        </button>
+      )}
+      <button
+        style={{ marginTop: 4, background: 'none', border: 'none', color: '#888', fontSize: '0.84rem', cursor: 'pointer', padding: '6px 12px' }}
+        onClick={handleGoToMain}
+      >
+        메인화면으로 → (매칭은 계속 진행)
       </button>
-      <button className="btn-back" style={{ marginTop: 4 }} onClick={onBack}>
-        ← 홈으로 (매칭은 계속 진행)
+      <button
+        style={{ background: 'none', border: 'none', color: '#bbb', fontSize: '0.78rem', cursor: 'pointer' }}
+        onClick={handleLeaveRoom}
+      >
+        방 나가기
       </button>
     </div>
   )
@@ -405,12 +446,20 @@ export default function RandomMatchScreen({
 
   if (view === 'join-wait') return (
     <div className="match-wrap">
-      <button className="btn-back" onClick={() => setView('join-input')}>← 뒤로</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <button className="btn-back" style={{ position: 'static', margin: 0 }} onClick={handleLeaveRoom}>← 방 나가기</button>
+        <button
+          style={{ background: 'none', border: 'none', color: '#888', fontSize: '0.82rem', cursor: 'pointer' }}
+          onClick={handleGoToMain}
+        >
+          메인화면으로 →
+        </button>
+      </div>
       <h2 className="match-title">입장 완료!</h2>
 
       <div className="room-code-box">
         <p className="room-code-label">입장한 방 코드</p>
-        <p className="room-code">{joinCode}</p>
+        <p className="room-code">{joinCode || roomCode}</p>
       </div>
 
       <div className="team-status-box">
@@ -419,20 +468,12 @@ export default function RandomMatchScreen({
           {joinRoomMembers.length === 0 ? (
             <p style={{ color: '#aaa', fontSize: '0.85rem' }}>멤버 정보를 불러오는 중...</p>
           ) : (
-            joinRoomMembers.map((name, i) => {
-              const isThisHost = joinRoomHostId
-                ? (name === joinRoomMembers.find((_, idx) => idx === 0) && i === 0) // host is first in ordered list
-                : i === 0
-              const isActualHost = joinRoomHostId
-                ? (name === currentUser.nickname && currentUser.id === joinRoomHostId) || (i === 0 && joinRoomHostId === 0)
-                : i === 0
-              return (
-                <div key={i} style={{ fontSize: '0.88rem', color: '#444', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span>{isActualHost || isThisHost ? '👑' : '✓'}</span>
-                  <span>{name}{name === currentUser.nickname ? ' (나)' : ''}</span>
-                </div>
-              )
-            })
+            joinRoomMembers.map((name, i) => (
+              <div key={i} style={{ fontSize: '0.88rem', color: '#444', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>{i === 0 ? '👑' : '✓'}</span>
+                <span>{name}{name === currentUser.nickname ? ' (나)' : ''}</span>
+              </div>
+            ))
           )}
         </div>
       </div>
