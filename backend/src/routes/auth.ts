@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
-import nodemailer from 'nodemailer'
+import * as brevo from '@getbrevo/brevo'
 import db from '../db'
 import { signToken } from '../middleware/auth'
 
@@ -10,18 +10,32 @@ function generateCode() {
   return String(Math.floor(100000 + Math.random() * 900000))
 }
 
-function getTransporter() {
-  const user = process.env.SMTP_USER
-  const pass = process.env.SMTP_PASS
+async function sendVerificationEmail(to: string, code: string) {
+  const apiKey = process.env.BREVO_API_KEY
+  const from = process.env.MAIL_FROM || 'bongdamsignal@gmail.com'
+  if (!apiKey) throw new Error('BREVO_API_KEY 환경변수를 설정해주세요.')
 
-  if (!user || !pass) {
-    throw new Error('SMTP_USER, SMTP_PASS 환경변수를 설정해주세요.')
-  }
+  const defaultClient = brevo.ApiClient.instance
+  defaultClient.authentications['api-key'].apiKey = apiKey
 
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user, pass },
-  })
+  const client = new brevo.TransactionalEmailsApi()
+  const email = new brevo.SendSmtpEmail()
+
+  email.sender = { email: from, name: '수원시그널' }
+  email.to = [{ email: to }]
+  email.subject = '[수원시그널] 이메일 인증번호'
+  email.textContent = `인증번호: ${code}\n\n이 코드는 10분간 유효합니다.`
+  email.htmlContent = `
+    <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;border:1px solid #eee;border-radius:12px">
+      <h2 style="color:#1a8fa0;margin-bottom:8px">수원시그널</h2>
+      <p style="color:#444;margin-bottom:24px">아래 인증번호를 입력해주세요. <strong>10분</strong> 이내에 사용해야 합니다.</p>
+      <div style="background:#f0f9fa;border-radius:8px;padding:24px;text-align:center;letter-spacing:8px;font-size:32px;font-weight:bold;color:#1a8fa0">
+        ${code}
+      </div>
+      <p style="color:#999;font-size:12px;margin-top:24px">본인이 요청하지 않은 경우 이 메일을 무시하세요.</p>
+    </div>
+  `
+  await client.sendTransacEmail(email)
 }
 
 // 인증코드 전송
@@ -50,22 +64,7 @@ router.post('/send-code', async (req: Request, res: Response) => {
   ).run(email, code, type, expiresAt)
 
   try {
-    const transporter = getTransporter()
-    await transporter.sendMail({
-      from: `"수원시그널" <${process.env.SMTP_USER}>`,
-      to: fullEmail,
-      subject: '[수원시그널] 이메일 인증번호',
-      html: `
-        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; border: 1px solid #eee; border-radius: 12px;">
-          <h2 style="color: #1a8fa0; margin-bottom: 8px;">수원시그널</h2>
-          <p style="color: #444; margin-bottom: 24px;">아래 인증번호를 입력해주세요. <strong>10분</strong> 이내에 사용해야 합니다.</p>
-          <div style="background: #f0f9fa; border-radius: 8px; padding: 24px; text-align: center; letter-spacing: 8px; font-size: 32px; font-weight: bold; color: #1a8fa0;">
-            ${code}
-          </div>
-          <p style="color: #999; font-size: 12px; margin-top: 24px;">본인이 요청하지 않은 경우 이 메일을 무시하세요.</p>
-        </div>
-      `,
-    })
+    await sendVerificationEmail(fullEmail, code)
     console.log(`[EMAIL] 발송 완료: ${fullEmail}`)
     return res.json({ message: '인증번호가 전송되었습니다.' })
   } catch (e) {
