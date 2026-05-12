@@ -11,7 +11,6 @@ export default function ForgotPasswordScreen({ onBack }: Props) {
   const [step, setStep] = useState<Step>('email')
   const [loading, setLoading] = useState(false)
   const [emailId, setEmailId] = useState('')
-  const [sentCode, setSentCode] = useState('')
   const [inputCode, setInputCode] = useState('')
   const [codeError, setCodeError] = useState(false)
   const [newPw, setNewPw] = useState('')
@@ -22,12 +21,10 @@ export default function ForgotPasswordScreen({ onBack }: Props) {
   const sendCode = async () => {
     setLoading(true)
     try {
-      const data = await api.post<{ code: string }>('/auth/send-code', { email: emailId, type: 'reset' })
-      setSentCode(data.code)
+      await api.post('/auth/send-code', { email: emailId, type: 'reset' })
       setInputCode('')
       setCodeError(false)
       setStep('verify')
-      alert(`[개발 테스트용]\n${emailId}@suwon.ac.kr 로 인증번호가 전송됐어요.\n인증번호: ${data.code}`)
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : '전송에 실패했습니다.')
     } finally {
@@ -36,7 +33,6 @@ export default function ForgotPasswordScreen({ onBack }: Props) {
   }
 
   const verifyCode = async () => {
-    if (inputCode !== sentCode) { setCodeError(true); return }
     setLoading(true)
     try {
       await api.post('/auth/verify-code', { email: emailId, code: inputCode, type: 'reset' })
