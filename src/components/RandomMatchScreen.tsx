@@ -98,6 +98,7 @@ export default function RandomMatchScreen({
   const [result, setResult]     = useState<MatchResult | null>(null)
   const [loading, setLoading]   = useState(false)
   const [kickingIdx, setKickingIdx] = useState<number | null>(null)
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
 
   // 빠른 매칭 상태 (soloStateResume이 있으면 복원)
   const [quickMatchSize, setQuickMatchSize] = useState(soloStateResume?.matchSize ?? 2)
@@ -499,35 +500,51 @@ export default function RandomMatchScreen({
   )
 
   if (view === 'seeking') return (
-    <div className="match-wrap">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <button className="btn-back" style={{ position: 'static', margin: 0 }} onClick={handleLeaveRoom}>
-          ← 방 나가기
-        </button>
-        <button
-          style={{ background: 'none', border: 'none', color: '#888', fontSize: '0.82rem', cursor: 'pointer' }}
-          onClick={handleGoToMain}
-        >
-          메인화면으로 →
-        </button>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, flex: 1, paddingTop: 40 }}>
-        <div style={{ fontSize: '3.5rem', animation: 'heartSpin 1s linear infinite' }}>💘</div>
-        <h2 className="match-title" style={{ textAlign: 'center' }}>상대팀을 찾고 있어요...</h2>
-        <p className="step-desc" style={{ textAlign: 'center' }}>
-          {otherGender}자팀이 준비되면<br />자동으로 매칭돼요!
-        </p>
-        <p style={{ fontSize: '0.8rem', color: '#aaa', textAlign: 'center', marginTop: -8 }}>
-          채팅방을 이용하려면 상단의 '메인화면으로'를 탭하세요
-        </p>
-        {isHostOfRoom && (
-          <button className="btn-signup" onClick={handleCancelMatch} style={{ marginTop: 8, width: '100%' }}>
-            매칭 취소
+    <>
+      {showCancelConfirm && (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <div className="modal-header">
+              <h3 className="modal-title">매칭 취소</h3>
+            </div>
+            <p className="step-desc" style={{ textAlign: 'center' }}>매칭을 취소하시겠어요?</p>
+            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+              <button className="btn-signup" style={{ flex: 1 }} onClick={() => setShowCancelConfirm(false)}>아니오</button>
+              <button className="btn-login" style={{ flex: 1, background: '#e74c3c' }} onClick={() => { setShowCancelConfirm(false); handleCancelMatch() }}>예</button>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="match-wrap">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <button className="btn-back" style={{ position: 'static', margin: 0 }} onClick={handleLeaveRoom}>
+            ← 방 나가기
           </button>
-        )}
+          <button
+            style={{ background: 'none', border: 'none', color: '#888', fontSize: '0.82rem', cursor: 'pointer' }}
+            onClick={handleGoToMain}
+          >
+            메인화면으로 →
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, flex: 1, paddingTop: 40 }}>
+          <div style={{ fontSize: '3.5rem', animation: 'heartSpin 1s linear infinite' }}>💘</div>
+          <h2 className="match-title" style={{ textAlign: 'center' }}>상대팀을 찾고 있어요...</h2>
+          <p className="step-desc" style={{ textAlign: 'center' }}>
+            {otherGender}자팀이 준비되면<br />자동으로 매칭돼요!
+          </p>
+          <p style={{ fontSize: '0.8rem', color: '#aaa', textAlign: 'center', marginTop: -8 }}>
+            채팅방을 이용하려면 상단의 '메인화면으로'를 탭하세요
+          </p>
+          {isHostOfRoom && (
+            <button className="btn-signup" onClick={() => setShowCancelConfirm(true)} style={{ marginTop: 8, width: '100%' }}>
+              매칭 취소
+            </button>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   )
 
   if (view === 'join-input') return (
@@ -630,10 +647,25 @@ export default function RandomMatchScreen({
   )
 
   if (view === 'quick-match') return (
+    <>
+      {showCancelConfirm && (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <div className="modal-header">
+              <h3 className="modal-title">매칭 취소</h3>
+            </div>
+            <p className="step-desc" style={{ textAlign: 'center' }}>빠른 매칭을 취소하시겠어요?</p>
+            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+              <button className="btn-signup" style={{ flex: 1 }} onClick={() => setShowCancelConfirm(false)}>아니오</button>
+              <button className="btn-login" style={{ flex: 1, background: '#e74c3c' }} onClick={() => { setShowCancelConfirm(false); handleLeaveQuickMatch(); onBack() }}>예</button>
+            </div>
+          </div>
+        </div>
+      )}
     <div className="match-wrap">
       {quickMatchActive ? (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <button className="btn-back" style={{ position: 'static', margin: 0 }} onClick={() => { handleLeaveQuickMatch(); onBack() }}>← 매칭 취소</button>
+          <button className="btn-back" style={{ position: 'static', margin: 0 }} onClick={() => setShowCancelConfirm(true)}>← 매칭 취소</button>
           <button style={{ background: 'none', border: 'none', color: '#888', fontSize: '0.82rem', cursor: 'pointer' }} onClick={handleGoToMainSolo}>
             메인화면으로 →
           </button>
@@ -695,6 +727,7 @@ export default function RandomMatchScreen({
         </>
       )}
     </div>
+    </>
   )
 
   return null

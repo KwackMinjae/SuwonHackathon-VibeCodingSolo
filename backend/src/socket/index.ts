@@ -376,7 +376,8 @@ export function setupSocket(io: IOServer) {
       const now = new Date()
       const time = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`
 
-      io.to(`room:${roomId}`).emit('new-message', {
+      // 발신자는 이미 낙관적 업데이트를 했으므로 나머지에게만 전송
+      socket.broadcast.to(`room:${roomId}`).emit('new-message', {
         id: msg.id, text: msg.text, senderName: msg.nickname,
         userId: msg.user_id, time, type: msg.type,
       })

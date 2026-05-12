@@ -38,6 +38,8 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
   const [activeRoom, setActiveRoom] = useState<ChatRoom | null>(null)
   const [teamState, setTeamState]     = useState<TeamState | null>(null)
   const [soloQueueState, setSoloQueueState] = useState<SoloQueueState | null>(null)
+  const [showSoloCancelConfirm, setShowSoloCancelConfirm] = useState(false)
+  const [showTeamCancelConfirm, setShowTeamCancelConfirm] = useState(false)
 
   const handleMatchSuccess = (matchedUsers: MockUser[], size: number, roomId?: number) => {
     const t = nowTime()
@@ -313,6 +315,38 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
         ))}
       </nav>
 
+      {/* 빠른 매칭 취소 확인 모달 */}
+      {showSoloCancelConfirm && (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <div className="modal-header">
+              <h3 className="modal-title">빠른 매칭 취소</h3>
+            </div>
+            <p className="step-desc" style={{ textAlign: 'center' }}>빠른 매칭을 취소하시겠어요?</p>
+            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+              <button className="btn-signup" style={{ flex: 1 }} onClick={() => setShowSoloCancelConfirm(false)}>아니오</button>
+              <button className="btn-login" style={{ flex: 1, background: '#e74c3c' }} onClick={() => { setShowSoloCancelConfirm(false); handleCancelSoloQueue() }}>예</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 팀 매칭 취소 확인 모달 */}
+      {showTeamCancelConfirm && (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <div className="modal-header">
+              <h3 className="modal-title">매칭 취소</h3>
+            </div>
+            <p className="step-desc" style={{ textAlign: 'center' }}>팀 매칭을 취소하고 방을 나가시겠어요?</p>
+            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+              <button className="btn-signup" style={{ flex: 1 }} onClick={() => setShowTeamCancelConfirm(false)}>아니오</button>
+              <button className="btn-login" style={{ flex: 1, background: '#e74c3c' }} onClick={() => { setShowTeamCancelConfirm(false); handleCancelTeam() }}>예</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 빠른 매칭 대기 팝업 */}
       {soloQueueState && !teamState && (
         <div
@@ -355,7 +389,7 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
               cursor: 'pointer',
               flexShrink: 0,
             }}
-            onClick={e => { e.stopPropagation(); handleCancelSoloQueue() }}
+            onClick={e => { e.stopPropagation(); setShowSoloCancelConfirm(true) }}
           >
             취소
           </button>
@@ -410,7 +444,7 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
               cursor: 'pointer',
               flexShrink: 0,
             }}
-            onClick={e => { e.stopPropagation(); handleCancelTeam() }}
+            onClick={e => { e.stopPropagation(); setShowTeamCancelConfirm(true) }}
           >
             나가기
           </button>
