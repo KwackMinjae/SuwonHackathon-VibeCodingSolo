@@ -155,12 +155,14 @@ export default function RandomMatchScreen({
     }
     const onKicked = () => { alert('방에서 추방되었습니다.'); onBack() }
     const onRoomClosed = () => { alert('방장이 방을 나갔습니다.'); onBack() }
+    const onMatchError = (data: { message: string }) => { alert(data.message) }
 
     socket.on('member-joined', onMemberJoined)
     socket.on('match-started', onMatchStarted)
     socket.on('match-seeking', onMatchSeeking)
     socket.on('kicked-from-room', onKicked)
     socket.on('room-closed', onRoomClosed)
+    socket.on('match-error', onMatchError)
 
     return () => {
       socket.off('member-joined', onMemberJoined)
@@ -168,6 +170,7 @@ export default function RandomMatchScreen({
       socket.off('match-seeking', onMatchSeeking)
       socket.off('kicked-from-room', onKicked)
       socket.off('room-closed', onRoomClosed)
+      socket.off('match-error', onMatchError)
       socket.emit('leave-room', roomId)
     }
   }, [view, roomId, processMatchResult, currentUser.nickname, onBack])
@@ -420,8 +423,15 @@ export default function RandomMatchScreen({
       </div>
 
       {isHostOfRoom ? (
-        <button className="btn-login" onClick={handleStartMatch}>
-          매칭 시작하기 💘
+        <button
+          className="btn-login"
+          onClick={handleStartMatch}
+          disabled={myTeamMembers.length < matchSize}
+          style={myTeamMembers.length < matchSize ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+        >
+          {myTeamMembers.length < matchSize
+            ? `팀원을 모아주세요 (${myTeamMembers.length}/${matchSize}명)`
+            : '매칭 시작하기 💘'}
         </button>
       ) : (
         <p className="step-desc" style={{ textAlign: 'center', marginTop: 12 }}>

@@ -77,6 +77,12 @@ export function setupSocket(io: IOServer) {
       // 실제 현재 인원수 기준으로 매칭
       const myMemberCount = (db.prepare('SELECT COUNT(*) AS cnt FROM room_members WHERE room_id = ?').get(roomId) as { cnt: number }).cnt
 
+      // 팀 정원이 차지 않으면 매칭 불가
+      if (myMemberCount < capacity) {
+        socket.emit('match-error', { message: `팀원이 부족합니다. (${myMemberCount}/${capacity}명)` })
+        return
+      }
+
       const compatibleRoomId = findCompatibleRoom(capacity, myGender, myMemberCount)
 
       if (compatibleRoomId !== null) {

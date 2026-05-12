@@ -399,7 +399,11 @@ export function ChatRoomView({ room, currentUserId, currentNickname, onBack, onS
   const [showVerify, setShowVerify]     = useState(false)
   const [showPick, setShowPick]         = useState(false)
   const [showLeave, setShowLeave]       = useState(false)
+  const [showMembers, setShowMembers]   = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  // stale closure 방지용 ref
+  const roomRef = useRef(room)
+  useEffect(() => { roomRef.current = room })
 
   useEffect(() => {
     const socket = getSocket()
@@ -415,27 +419,31 @@ export function ChatRoomView({ room, currentUserId, currentNickname, onBack, onS
         userId: msg.userId,
         isAppointment: msg.type === 'appointment',
       }
-      onUpdateRoom({ ...room, messages: [...room.messages, newMsg] })
+      const cur = roomRef.current
+      onUpdateRoom({ ...cur, messages: [...cur.messages, newMsg] })
     })
 
     socket.on('appointment-updated', (data: { place: string; datetimeISO: string; accepted: boolean; verified: boolean }) => {
       const apptMsg: ChatMessage = { id: Date.now(), text: '', isMine: false, time: nowTime(), isAppointment: true }
+      const cur = roomRef.current
       onUpdateRoom({
-        ...room,
-        messages: [...room.messages, apptMsg],
+        ...cur,
+        messages: [...cur.messages, apptMsg],
         appointment: { place: data.place, datetimeISO: data.datetimeISO, accepted: false, verified: false },
       })
     })
 
     socket.on('appointment-accepted', () => {
-      if (room.appointment) {
-        onUpdateRoom({ ...room, appointment: { ...room.appointment, accepted: true } })
+      const cur = roomRef.current
+      if (cur.appointment) {
+        onUpdateRoom({ ...cur, appointment: { ...cur.appointment, accepted: true } })
       }
     })
 
     socket.on('appointment-verified', () => {
-      if (room.appointment) {
-        onUpdateRoom({ ...room, appointment: { ...room.appointment, verified: true } })
+      const cur = roomRef.current
+      if (cur.appointment) {
+        onUpdateRoom({ ...cur, appointment: { ...cur.appointment, verified: true } })
       }
     })
 
@@ -552,9 +560,41 @@ export function ChatRoomView({ room, currentUserId, currentNickname, onBack, onS
       )}
       {showLeave && <LeaveModal onClose={() => setShowLeave(false)} onLeave={onLeave} />}
 
+      {showMembers && (
+        <div className="modal-overlay" onClick={() => setShowMembers(false)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">멤버 목록</h3>
+              <button className="modal-close" onClick={() => setShowMembers(false)}>✕</button>
+            </div>
+            <div style={{ marginTop: 8 }}>
+              {(room.memberDetails && room.memberDetails.length > 0
+                ? room.memberDetails.map(m => ({ nickname: m.nickname, dept: m.dept, gender: m.gender }))
+                : room.members.map(name => ({ nickname: name, dept: '', gender: '' }))
+              ).map((m, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: m.gender === '여' ? '#ffd6e0' : '#d6e4ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', flexShrink: 0 }}>
+                    {m.gender === '여' ? '👧' : m.gender === '남' ? '👦' : '👤'}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.92rem' }}>
+                      {m.nickname}{m.nickname === currentNickname ? ' (나)' : ''}
+                    </div>
+                    {m.dept && <div style={{ fontSize: '0.78rem', color: '#888', marginTop: 2 }}>{m.dept}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button className="btn-login" style={{ marginTop: 16 }} onClick={() => setShowMembers(false)}>닫기</button>
+          </div>
+        </div>
+      )}
+
       <div className="chat-room-header">
         <button className="btn-back" onClick={onBack}>← 뒤로</button>
-        <h2 className="chat-room-title">{room.title}</h2>
+        <h2 className="chat-room-title" style={{ cursor: 'pointer' }} onClick={() => setShowMembers(true)}>
+          {room.title} <span style={{ fontSize: '0.7rem', color: '#aaa' }}>👥</span>
+        </h2>
         {rightBtn}
       </div>
 
