@@ -99,13 +99,18 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
     const onMatchSeeking = () => {
       setTeamState(prev => prev ? { ...prev, isSeeking: true } : prev)
     }
+    const onRoomClosed = () => {
+      setTeamState(null)
+    }
 
     socket.on('match-started', onMatchStarted)
     socket.on('match-seeking', onMatchSeeking)
+    socket.on('room-closed', onRoomClosed)
 
     return () => {
       socket.off('match-started', onMatchStarted)
       socket.off('match-seeking', onMatchSeeking)
+      socket.off('room-closed', onRoomClosed)
     }
   }, [teamState?.roomId, sub])
 

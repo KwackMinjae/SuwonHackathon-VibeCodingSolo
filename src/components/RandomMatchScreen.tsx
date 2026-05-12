@@ -131,17 +131,20 @@ export default function RandomMatchScreen({
     const onMatchStarted = (data: MatchStartedPayload) => processMatchResult(data)
     const onMatchSeeking = () => setView('seeking')
     const onKicked = () => { alert('방에서 추방되었습니다.'); onBack() }
+    const onRoomClosed = () => { alert('방장이 방을 나갔습니다.'); onBack() }
 
     socket.on('member-joined', onMemberJoined)
     socket.on('match-started', onMatchStarted)
     socket.on('match-seeking', onMatchSeeking)
     socket.on('kicked-from-room', onKicked)
+    socket.on('room-closed', onRoomClosed)
 
     return () => {
       socket.off('member-joined', onMemberJoined)
       socket.off('match-started', onMatchStarted)
       socket.off('match-seeking', onMatchSeeking)
       socket.off('kicked-from-room', onKicked)
+      socket.off('room-closed', onRoomClosed)
       socket.emit('leave-room', roomId)
     }
   }, [view, roomId, processMatchResult, currentUser.nickname, onBack])
@@ -179,17 +182,20 @@ export default function RandomMatchScreen({
     const onMatchStarted = (data: MatchStartedPayload) => processMatchResult(data)
     const onMatchSeeking = () => setView('seeking')  // 팀원도 매칭 대기 화면 진입
     const onKicked = () => { alert('방에서 추방되었습니다.'); setView('join-input') }
+    const onRoomClosed = () => { alert('방장이 방을 나갔습니다.'); setView('join-input') }
 
     socket.on('member-joined', onMemberJoined)
     socket.on('match-started', onMatchStarted)
     socket.on('match-seeking', onMatchSeeking)
     socket.on('kicked-from-room', onKicked)
+    socket.on('room-closed', onRoomClosed)
 
     return () => {
       socket.off('member-joined', onMemberJoined)
       socket.off('match-started', onMatchStarted)
       socket.off('match-seeking', onMatchSeeking)
       socket.off('kicked-from-room', onKicked)
+      socket.off('room-closed', onRoomClosed)
       socket.emit('leave-room', roomId)
     }
   }, [view, roomId, processMatchResult])

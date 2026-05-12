@@ -161,14 +161,35 @@ router.delete('/:id/members/:userId', (req: AuthRequest, res: Response) => {
 router.delete('/:id/leave', (req: AuthRequest, res: Response) => {
   const roomId = parseInt(req.params.id)
   const user = db.prepare('SELECT nickname FROM users WHERE id = ?').get(req.userId) as { nickname: string }
+  const room = db.prepare('SELECT host_id, status FROM rooms WHERE id = ?').get(roomId) as { host_id: number; status: string } | undefined
 
-  db.prepare('DELETE FROM room_members WHERE room_id = ? AND user_id = ?').run(roomId, req.userId)
-  db.prepare('INSERT INTO messages (room_id, user_id, nickname, text, type) VALUES (?, ?, ?, ?, ?)')
-    .run(roomId, null, '시스템', `🚪 ${user.nickname}님이 퇴장했어요.`, 'system')
+  const io = getIo()
 
-  const memberCount = (db.prepare('SELECT COUNT(*) AS cnt FROM room_members WHERE room_id = ?').get(roomId) as { cnt: number }).cnt
-  if (memberCount === 0) {
+  if (room && room.host_id === req.userId && room.status === 'waiting') {
+    // 방장이 나가면 방 전체 종료
+    db.prepare('DELETE FROM room_members WHERE room_id = ?').run(roomId)
     db.prepare("UPDATE rooms SET status = 'closed' WHERE id = ?").run(roomId)
+    io.to(`room:${roomId}`).emit('room-closed', { roomId, reason: '방장이 방을 나갔습니다.' })
+  } else {
+    db.prepare('DELETE FROM room_members WHERE room_id = ? AND user_id = ?').run(roomId, req.userId)
+    db.prepare('INSERT INTO messages (room_id, user_id, nickname, text, type) VALUES (?, ?, ?, ?, ?)')
+      .run(roomId, null, '시스템', `🚪 ${user.nickname}님이 퇴장했어요.`, 'system')
+
+    const updatedMembers = db.prepare(`
+      SELECT u.nickname FROM room_members rm JOIN users u ON u.id = rm.user_id
+      WHERE rm.room_id = ?
+      ORDER BY CASE WHEN u.id = ? THEN 0 ELSE 1 END, rm.id ASC
+    `).all(roomId, room?.host_id ?? 0) as { nickname: string }[]
+
+    io.to(`room:${roomId}`).emit('member-joined', {
+      members: updatedMembers.map(m => m.nickname),
+      memberCount: updatedMembers.length,
+      hostId: room?.host_id,
+    })
+
+    if (updatedMembers.length === 0) {
+      db.prepare("UPDATE rooms SET status = 'closed' WHERE id = ?").run(roomId)
+    }
   }
 
   return res.json({ message: '방을 나갔습니다.' })
