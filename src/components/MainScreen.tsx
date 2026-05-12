@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import SettingsTab from './SettingsTab'
 import { ChatList, ChatRoomView, ChatRoom, ChatMessage } from './ChatScreen'
-import RandomMatchScreen, { UserProfile, MockUser } from './RandomMatchScreen'
+import RandomMatchScreen, { UserProfile, MockUser, SeekingInfo } from './RandomMatchScreen'
 import { api } from '../api/client'
 
 type Tab = '과팅' | '채팅방' | '설정'
@@ -35,6 +35,7 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
   const [sub, setSub]           = useState<SubScreen>(null)
   const [chatRooms, setChatRooms]   = useState<ChatRoom[]>([])
   const [activeRoom, setActiveRoom] = useState<ChatRoom | null>(null)
+  const [seekingInfo, setSeekingInfo] = useState<SeekingInfo | null>(null)
 
   const handleMatchSuccess = (matchedUsers: MockUser[], size: number, roomId?: number) => {
     const t = nowTime()
@@ -67,6 +68,7 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
     }
     setChatRooms(prev => [...prev, newRoom])
     setActiveRoom(newRoom)
+    setSeekingInfo(null)
     setSub('chatroom')
     setTab('채팅방')
   }
@@ -107,22 +109,6 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
     setCurrentUser({ ...currentUser, nickname })
   }
 
-  if (sub === 'random-create') return (
-    <RandomMatchScreen
-      onBack={() => setSub(null)}
-      currentUser={currentUser}
-      onMatchSuccess={handleMatchSuccess}
-      initialView="host-setup"
-    />
-  )
-  if (sub === 'random-join') return (
-    <RandomMatchScreen
-      onBack={() => setSub(null)}
-      currentUser={currentUser}
-      onMatchSuccess={handleMatchSuccess}
-      initialView="join-input"
-    />
-  )
   const handleMutualMatch = (dmRoomId: number, title: string, otherNickname: string) => {
     const newRoom: ChatRoom = {
       id: dmRoomId,
@@ -142,6 +128,25 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
     setTab('채팅방')
   }
 
+  if (sub === 'random-create') return (
+    <RandomMatchScreen
+      onBack={() => setSub(null)}
+      currentUser={currentUser}
+      onMatchSuccess={handleMatchSuccess}
+      onSeekingStarted={info => setSeekingInfo(info)}
+      onSeekingEnded={() => setSeekingInfo(null)}
+      seekingResume={seekingInfo ?? undefined}
+      initialView="host-setup"
+    />
+  )
+  if (sub === 'random-join') return (
+    <RandomMatchScreen
+      onBack={() => setSub(null)}
+      currentUser={currentUser}
+      onMatchSuccess={handleMatchSuccess}
+      initialView="join-input"
+    />
+  )
   if (sub === 'chatroom' && activeRoom) return (
     <ChatRoomView
       room={activeRoom}
@@ -162,7 +167,15 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
       </div>
 
       <div className="main-content">
-        {tab === '과팅'  && <GatingTab onCreate={() => setSub('random-create')} onJoin={() => setSub('random-join')} />}
+        {tab === '과팅'  && (
+          <GatingTab
+            onCreate={() => setSub('random-create')}
+            onJoin={() => setSub('random-join')}
+            seekingInfo={seekingInfo}
+            onResumeSeek={() => setSub('random-create')}
+            onCancelSeek={() => setSeekingInfo(null)}
+          />
+        )}
         {tab === '채팅방' && <ChatList rooms={chatRooms} onOpenRoom={handleOpenRoom} />}
         {tab === '설정'  && (
           <SettingsTab
@@ -209,12 +222,52 @@ function navIcon(tab: Tab) {
   )
 }
 
-function GatingTab({ onCreate, onJoin }: { onCreate: () => void; onJoin: () => void }) {
+interface GatingTabProps {
+  onCreate: () => void
+  onJoin: () => void
+  seekingInfo: SeekingInfo | null
+  onResumeSeek: () => void
+  onCancelSeek: () => void
+}
+
+function GatingTab({ onCreate, onJoin, seekingInfo, onResumeSeek, onCancelSeek }: GatingTabProps) {
   return (
     <div className="gating-tab">
       <div className="gating-header">
         <p className="gating-subtitle">설레는 과팅을 시작해보세요 💙</p>
       </div>
+
+      {seekingInfo && (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #ff6b9d, #ff8c69)',
+            borderRadius: 14,
+            padding: '14px 18px',
+            marginBottom: 16,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            cursor: 'pointer',
+            boxShadow: '0 2px 12px rgba(255,107,157,0.25)',
+          }}
+          onClick={onResumeSeek}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: '1.4rem', animation: 'heartSpin 1s linear infinite' }}>💘</span>
+            <div>
+              <p style={{ margin: 0, fontWeight: 700, color: '#fff', fontSize: '0.95rem' }}>매칭 중...</p>
+              <p style={{ margin: 0, color: 'rgba(255,255,255,0.85)', fontSize: '0.78rem' }}>탭해서 매칭 화면으로</p>
+            </div>
+          </div>
+          <button
+            style={{ background: 'rgba(255,255,255,0.25)', border: 'none', color: '#fff', borderRadius: 8, padding: '4px 10px', fontSize: '0.78rem', cursor: 'pointer' }}
+            onClick={e => { e.stopPropagation(); onCancelSeek() }}
+          >
+            취소
+          </button>
+        </div>
+      )}
+
       <div className="gating-cards">
         <button className="gating-card card-notice" onClick={onCreate}>
           <div className="card-icon">🏠</div>

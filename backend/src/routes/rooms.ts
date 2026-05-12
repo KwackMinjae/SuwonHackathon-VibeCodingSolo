@@ -58,7 +58,7 @@ router.post('/join', (req: AuthRequest, res: Response) => {
   if (!code) return res.status(400).json({ message: '초대 코드가 필요합니다.' })
 
   const room = db.prepare('SELECT * FROM rooms WHERE code = ?').get(code) as {
-    id: number; title: string; code: string; capacity: number; team_gender: string; status: string
+    id: number; title: string; code: string; capacity: number; team_gender: string; status: string; host_id: number
   } | undefined
 
   if (!room) return res.status(404).json({ message: '존재하지 않는 방입니다.' })
@@ -75,20 +75,23 @@ router.post('/join', (req: AuthRequest, res: Response) => {
       .run(room.id, null, '시스템', `👋 ${user.nickname}님이 입장했어요!`, 'system')
   }
 
-  // 현재 멤버 목록 조회
-  const updatedMembers = db.prepare(
-    'SELECT u.nickname FROM room_members rm JOIN users u ON u.id = rm.user_id WHERE rm.room_id = ?'
-  ).all(room.id) as { nickname: string }[]
+  // 현재 멤버 목록 조회 (host 먼저)
+  const updatedMembers = db.prepare(`
+    SELECT u.nickname, u.id
+    FROM room_members rm JOIN users u ON u.id = rm.user_id
+    WHERE rm.room_id = ?
+    ORDER BY CASE WHEN u.id = ? THEN 0 ELSE 1 END, rm.id ASC
+  `).all(room.id, room.host_id) as { nickname: string; id: number }[]
 
-  // 소켓으로 방 전체에 알림
   const io = getIo()
   io.to(`room:${room.id}`).emit('member-joined', {
     members: updatedMembers.map(m => m.nickname),
     memberCount: updatedMembers.length,
+    hostId: room.host_id,
   })
 
   return res.json({
-    room: { id: room.id, title: room.title, code: room.code, capacity: room.capacity, teamGender: room.team_gender, memberCount: updatedMembers.length },
+    room: { id: room.id, title: room.title, code: room.code, capacity: room.capacity, teamGender: room.team_gender, memberCount: updatedMembers.length, hostId: room.host_id },
   })
 })
 
@@ -97,7 +100,7 @@ router.get('/:id', (req: AuthRequest, res: Response) => {
   const roomId = parseInt(req.params.id)
 
   const room = db.prepare('SELECT * FROM rooms WHERE id = ?').get(roomId) as {
-    id: number; title: string; code: string; capacity: number; team_gender: string; status: string
+    id: number; title: string; code: string; capacity: number; team_gender: string; status: string; host_id: number
   } | undefined
 
   if (!room) return res.status(404).json({ message: '방을 찾을 수 없습니다.' })
@@ -107,7 +110,8 @@ router.get('/:id', (req: AuthRequest, res: Response) => {
     FROM room_members rm
     JOIN users u ON u.id = rm.user_id
     WHERE rm.room_id = ?
-  `).all(roomId) as { id: number; nickname: string; gender: string; dept: string; email: string; student_id: string }[]
+    ORDER BY CASE WHEN u.id = ? THEN 0 ELSE 1 END, rm.id ASC
+  `).all(roomId, room.host_id) as { id: number; nickname: string; gender: string; dept: string; email: string; student_id: string }[]
 
   const messages = db.prepare(
     'SELECT * FROM messages WHERE room_id = ? ORDER BY created_at ASC'
@@ -115,7 +119,42 @@ router.get('/:id', (req: AuthRequest, res: Response) => {
 
   const appointment = db.prepare('SELECT * FROM appointments WHERE room_id = ?').get(roomId)
 
-  return res.json({ room: { ...room, teamGender: room.team_gender, members, memberCount: members.length, messages, appointment } })
+  return res.json({ room: { ...room, teamGender: room.team_gender, hostId: room.host_id, members, memberCount: members.length, messages, appointment } })
+})
+
+// 팀원 추방 (방장 전용)
+router.delete('/:id/members/:userId', (req: AuthRequest, res: Response) => {
+  const roomId = parseInt(req.params.id)
+  const targetUserId = parseInt(req.params.userId)
+
+  const room = db.prepare('SELECT host_id FROM rooms WHERE id = ?').get(roomId) as { host_id: number } | undefined
+  if (!room) return res.status(404).json({ message: '방을 찾을 수 없습니다.' })
+  if (room.host_id !== req.userId) return res.status(403).json({ message: '방장만 추방할 수 있습니다.' })
+  if (targetUserId === req.userId) return res.status(400).json({ message: '자신을 추방할 수 없습니다.' })
+
+  const target = db.prepare('SELECT nickname FROM users WHERE id = ?').get(targetUserId) as { nickname: string } | undefined
+  if (!target) return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' })
+
+  db.prepare('DELETE FROM room_members WHERE room_id = ? AND user_id = ?').run(roomId, targetUserId)
+  db.prepare('INSERT INTO messages (room_id, user_id, nickname, text, type) VALUES (?, ?, ?, ?, ?)')
+    .run(roomId, null, '시스템', `🚫 ${target.nickname}님이 추방되었습니다.`, 'system')
+
+  const updatedMembers = db.prepare(`
+    SELECT u.nickname, u.id
+    FROM room_members rm JOIN users u ON u.id = rm.user_id
+    WHERE rm.room_id = ?
+    ORDER BY CASE WHEN u.id = ? THEN 0 ELSE 1 END, rm.id ASC
+  `).all(roomId, room.host_id) as { nickname: string; id: number }[]
+
+  const io = getIo()
+  io.to(`room:${roomId}`).emit('member-joined', {
+    members: updatedMembers.map(m => m.nickname),
+    memberCount: updatedMembers.length,
+    hostId: room.host_id,
+  })
+  io.to(`user:${targetUserId}`).emit('kicked-from-room', { roomId })
+
+  return res.json({ message: '추방되었습니다.' })
 })
 
 // 방 나가기

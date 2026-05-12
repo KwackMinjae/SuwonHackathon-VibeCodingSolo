@@ -12,6 +12,7 @@ interface AuthSocket extends Socket {
 interface SeekingRoom {
   capacity: number
   teamGender: string
+  memberCount: number
 }
 
 // 매칭 대기 중인 방 (roomId → 정보)
@@ -21,10 +22,10 @@ function makeCode() {
   return String(Math.floor(100000 + Math.random() * 900000))
 }
 
-function findCompatibleRoom(capacity: number, myGender: string): number | null {
+function findCompatibleRoom(capacity: number, myGender: string, myMemberCount: number): number | null {
   const oppositeGender = myGender === '남' ? '여' : '남'
   for (const [roomId, info] of seekingRooms.entries()) {
-    if (info.capacity === capacity && info.teamGender === oppositeGender) {
+    if (info.capacity === capacity && info.teamGender === oppositeGender && info.memberCount === myMemberCount) {
       return roomId
     }
   }
@@ -73,7 +74,10 @@ export function setupSocket(io: IOServer) {
       const myGender = room.team_gender
       const capacity = room.capacity
 
-      const compatibleRoomId = findCompatibleRoom(capacity, myGender)
+      // 실제 현재 인원수 기준으로 매칭
+      const myMemberCount = (db.prepare('SELECT COUNT(*) AS cnt FROM room_members WHERE room_id = ?').get(roomId) as { cnt: number }).cnt
+
+      const compatibleRoomId = findCompatibleRoom(capacity, myGender, myMemberCount)
 
       if (compatibleRoomId !== null) {
         // 매칭 성사!
@@ -93,14 +97,14 @@ export function setupSocket(io: IOServer) {
 
         const allMembers = [...myMembers, ...theirMembers]
 
-        // 새 매칭 방 생성
-        const title = `${capacity}v${capacity} 과팅`
+        // 새 매칭 방 생성 (실제 인원수 기준 타이틀)
+        const title = `${myMemberCount}v${myMemberCount} 과팅`
         let code = makeCode()
         while (db.prepare('SELECT id FROM rooms WHERE code = ?').get(code)) code = makeCode()
 
         const result = db.prepare(
           'INSERT INTO rooms (title, code, host_id, capacity, team_gender, status) VALUES (?, ?, ?, ?, ?, ?)'
-        ).run(title, code, socket.userId, capacity, myGender, 'active') as { lastInsertRowid: number }
+        ).run(title, code, socket.userId, myMemberCount * 2, myGender, 'active') as { lastInsertRowid: number }
 
         const matchRoomId = Number(result.lastInsertRowid)
 
@@ -108,21 +112,21 @@ export function setupSocket(io: IOServer) {
           db.prepare('INSERT OR IGNORE INTO room_members (room_id, user_id) VALUES (?, ?)').run(matchRoomId, u.id)
         }
         db.prepare('INSERT INTO messages (room_id, user_id, nickname, text, type) VALUES (?, ?, ?, ?, ?)')
-          .run(matchRoomId, null, '시스템', `🎉 ${capacity}v${capacity} 매칭이 완료되었어요!`, 'system')
+          .run(matchRoomId, null, '시스템', `🎉 ${myMemberCount}v${myMemberCount} 매칭이 완료되었어요!`, 'system')
 
         db.prepare("UPDATE rooms SET status = 'closed' WHERE id IN (?, ?)").run(roomId, compatibleRoomId)
 
-        const payload = { roomId: matchRoomId, members: allMembers, size: capacity, teamGender: myGender }
+        const payload = { roomId: matchRoomId, members: allMembers, size: myMemberCount, teamGender: myGender }
         io.to(`room:${roomId}`).emit('match-started', payload)
         io.to(`room:${compatibleRoomId}`).emit('match-started', payload)
 
-        console.log(`[Socket] 매칭 성사: room${roomId} + room${compatibleRoomId} → room${matchRoomId}`)
+        console.log(`[Socket] 매칭 성사: room${roomId} + room${compatibleRoomId} → room${matchRoomId} (${myMemberCount}v${myMemberCount})`)
       } else {
         // 대기 큐에 추가
-        seekingRooms.set(roomId, { capacity, teamGender: myGender })
+        seekingRooms.set(roomId, { capacity, teamGender: myGender, memberCount: myMemberCount })
         db.prepare("UPDATE rooms SET status = 'seeking' WHERE id = ?").run(roomId)
-        io.to(`room:${roomId}`).emit('match-seeking', { roomId })
-        console.log(`[Socket] 매칭 대기: room${roomId} (${myGender}자 ${capacity}v${capacity})`)
+        io.to(`room:${roomId}`).emit('match-seeking', { roomId, memberCount: myMemberCount })
+        console.log(`[Socket] 매칭 대기: room${roomId} (${myGender}자 ${myMemberCount}명/${capacity}v${capacity})`)
       }
     })
 
