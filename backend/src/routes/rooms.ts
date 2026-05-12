@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import db from '../db'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { getIo } from '../io'
 
 const router = Router()
 router.use(authMiddleware)
@@ -74,9 +75,20 @@ router.post('/join', (req: AuthRequest, res: Response) => {
       .run(room.id, null, '시스템', `👋 ${user.nickname}님이 입장했어요!`, 'system')
   }
 
-  const newCount = memberCount + (alreadyIn ? 0 : 1)
+  // 현재 멤버 목록 조회
+  const updatedMembers = db.prepare(
+    'SELECT u.nickname FROM room_members rm JOIN users u ON u.id = rm.user_id WHERE rm.room_id = ?'
+  ).all(room.id) as { nickname: string }[]
+
+  // 소켓으로 방 전체에 알림
+  const io = getIo()
+  io.to(`room:${room.id}`).emit('member-joined', {
+    members: updatedMembers.map(m => m.nickname),
+    memberCount: updatedMembers.length,
+  })
+
   return res.json({
-    room: { id: room.id, title: room.title, code: room.code, capacity: room.capacity, teamGender: room.team_gender, memberCount: newCount },
+    room: { id: room.id, title: room.title, code: room.code, capacity: room.capacity, teamGender: room.team_gender, memberCount: updatedMembers.length },
   })
 })
 
@@ -91,11 +103,11 @@ router.get('/:id', (req: AuthRequest, res: Response) => {
   if (!room) return res.status(404).json({ message: '방을 찾을 수 없습니다.' })
 
   const members = db.prepare(`
-    SELECT u.id, u.nickname, u.gender, u.dept, u.email
+    SELECT u.id, u.nickname, u.gender, u.dept, u.email, u.student_id
     FROM room_members rm
     JOIN users u ON u.id = rm.user_id
     WHERE rm.room_id = ?
-  `).all(roomId) as { id: number; nickname: string; gender: string; dept: string; email: string }[]
+  `).all(roomId) as { id: number; nickname: string; gender: string; dept: string; email: string; student_id: string }[]
 
   const messages = db.prepare(
     'SELECT * FROM messages WHERE room_id = ? ORDER BY created_at ASC'
@@ -103,7 +115,7 @@ router.get('/:id', (req: AuthRequest, res: Response) => {
 
   const appointment = db.prepare('SELECT * FROM appointments WHERE room_id = ?').get(roomId)
 
-  return res.json({ room: { ...room, teamGender: room.team_gender, members, messages, appointment } })
+  return res.json({ room: { ...room, teamGender: room.team_gender, members, memberCount: members.length, messages, appointment } })
 })
 
 // 방 나가기
@@ -155,19 +167,62 @@ router.put('/:id/appointment/verify', (req: AuthRequest, res: Response) => {
   return res.json({ message: '만남이 인증되었습니다.' })
 })
 
-// 별점 등록
-router.post('/:id/ratings', (req: AuthRequest, res: Response) => {
+// 맘에 드는 상대 선택 (mutual like → 1:1 DM방)
+router.post('/:id/like', (req: AuthRequest, res: Response) => {
   const roomId = parseInt(req.params.id)
-  const { rateeId, stars } = req.body as { rateeId: number; stars: number }
-  if (!rateeId || !stars) return res.status(400).json({ message: '필수 항목이 누락되었습니다.' })
+  const { likeeId } = req.body as { likeeId: number }
+  if (!likeeId) return res.status(400).json({ message: 'likeeId가 필요합니다.' })
 
-  db.prepare(`
-    INSERT INTO ratings (room_id, rater_id, ratee_id, stars)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(room_id, rater_id, ratee_id) DO UPDATE SET stars = excluded.stars
-  `).run(roomId, req.userId, rateeId, stars)
+  const likerId = req.userId!
 
-  return res.json({ message: '별점이 등록되었습니다.' })
+  // 이미 선택했는지 확인
+  const existing = db.prepare('SELECT id FROM likes WHERE room_id = ? AND liker_id = ?').get(roomId, likerId)
+  if (existing) return res.status(409).json({ message: '이미 선택하셨습니다.' })
+
+  db.prepare('INSERT INTO likes (room_id, liker_id, likee_id) VALUES (?, ?, ?)').run(roomId, likerId, likeeId)
+
+  // 상호 선택 여부 확인
+  const mutual = db.prepare(
+    'SELECT id FROM likes WHERE room_id = ? AND liker_id = ? AND likee_id = ?'
+  ).get(roomId, likeeId, likerId)
+
+  if (!mutual) {
+    return res.json({ matched: false })
+  }
+
+  // 상호 선택! 1:1 DM방 생성
+  const liker = db.prepare('SELECT id, nickname FROM users WHERE id = ?').get(likerId) as { id: number; nickname: string }
+  const likee = db.prepare('SELECT id, nickname FROM users WHERE id = ?').get(likeeId) as { id: number; nickname: string }
+
+  const title = `💌 ${liker.nickname} & ${likee.nickname}`
+  const makeCode = () => String(Math.floor(100000 + Math.random() * 900000))
+  let code = makeCode()
+  while (db.prepare('SELECT id FROM rooms WHERE code = ?').get(code)) code = makeCode()
+
+  const result = db.prepare(
+    'INSERT INTO rooms (title, code, host_id, capacity, team_gender, status) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(title, code, likerId, 2, '혼성', 'active') as { lastInsertRowid: number }
+
+  const dmRoomId = Number(result.lastInsertRowid)
+  db.prepare('INSERT OR IGNORE INTO room_members (room_id, user_id) VALUES (?, ?)').run(dmRoomId, likerId)
+  db.prepare('INSERT OR IGNORE INTO room_members (room_id, user_id) VALUES (?, ?)').run(dmRoomId, likeeId)
+
+  // 두 유저에게 소켓 이벤트 전송
+  const io = getIo()
+  const payload = {
+    dmRoomId,
+    title,
+    otherUser: { id: likee.id, nickname: likee.nickname },
+  }
+  const payloadForLikee = {
+    dmRoomId,
+    title,
+    otherUser: { id: liker.id, nickname: liker.nickname },
+  }
+  io.to(`user:${likerId}`).emit('mutual-match-found', payload)
+  io.to(`user:${likeeId}`).emit('mutual-match-found', payloadForLikee)
+
+  return res.json({ matched: true, dmRoomId, title })
 })
 
 export default router

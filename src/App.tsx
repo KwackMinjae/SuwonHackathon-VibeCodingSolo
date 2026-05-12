@@ -14,7 +14,7 @@ function userInfoToProfile(u: UserInfo): UserProfile {
   return {
     id: u.id,
     nickname: u.nickname,
-    studentId: u.email,
+    studentId: u.student_id ?? '',
     gender: u.gender,
     dept: u.dept,
   }

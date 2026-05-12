@@ -19,6 +19,13 @@ export interface Appointment {
   verified: boolean
 }
 
+export interface MemberDetail {
+  id: number
+  nickname: string
+  gender: string
+  dept: string
+}
+
 export interface ChatRoom {
   id: number
   title: string
@@ -28,7 +35,9 @@ export interface ChatRoom {
   memberCount: number
   members: string[]
   memberIds?: Record<string, number>
+  memberDetails?: MemberDetail[]
   ratings: Record<string, number>
+  myLike?: string
 }
 
 function nowTime() {
@@ -66,10 +75,28 @@ function AppointmentModal({ onClose, onSend }: {
   onClose: () => void
   onSend: (place: string, dt: Date) => void
 }) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<{ name: string; address: string }[]>([])
+  const [searching, setSearching] = useState(false)
   const [place, setPlace] = useState('')
   const [dateStr, setDateStr] = useState('')
   const [timeStr, setTimeStr] = useState('')
   const canSend = place.trim() && dateStr && timeStr
+
+  const searchPlace = async () => {
+    if (!query.trim()) return
+    setSearching(true)
+    try {
+      const data = await api.get<{ places: { name: string; address: string }[] }>(
+        `/places/search?q=${encodeURIComponent(query.trim())}`
+      )
+      setResults(data.places)
+    } catch {
+      setResults([])
+    } finally {
+      setSearching(false)
+    }
+  }
 
   return (
     <div className="modal-overlay">
@@ -79,14 +106,40 @@ function AppointmentModal({ onClose, onSend }: {
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
         <div className="input-group">
-          <label>장소</label>
+          <label>장소 검색</label>
           <div className="place-row">
-            <input className="pw-input" placeholder="장소 이름 입력" value={place} onChange={e => setPlace(e.target.value)} />
-            <button className="btn-map-icon"
-              onClick={() => place.trim() && window.open(`https://map.kakao.com/?q=${encodeURIComponent(place.trim())}`, '_blank')}>
-              🗺️
+            <input
+              className="pw-input"
+              placeholder="메가커피, 스타벅스 홍대..."
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && searchPlace()}
+            />
+            <button className="btn-map-icon" onClick={searchPlace} disabled={searching}>
+              {searching ? '⏳' : '🔍'}
             </button>
           </div>
+          {results.length > 0 && (
+            <div style={{ border: '1px solid #eee', borderRadius: 8, marginTop: 6, maxHeight: 180, overflowY: 'auto' }}>
+              {results.map((r, i) => (
+                <button key={i}
+                  onClick={() => { setPlace(r.name); setQuery(r.name); setResults([]) }}
+                  style={{ width: '100%', textAlign: 'left', padding: '10px 12px', background: 'none', border: 'none', borderBottom: i < results.length - 1 ? '1px solid #f0f0f0' : 'none', cursor: 'pointer' }}>
+                  <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{r.name}</div>
+                  <div style={{ color: '#888', fontSize: '0.78rem', marginTop: 2 }}>{r.address}</div>
+                </button>
+              ))}
+            </div>
+          )}
+          {place && (
+            <div style={{ marginTop: 8, padding: '8px 12px', background: '#f0f9fa', borderRadius: 8, fontSize: '0.85rem' }}>
+              📍 선택됨: <strong>{place}</strong>
+              <button style={{ marginLeft: 8, color: '#1a8fa0', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem' }}
+                onClick={() => window.open(`https://map.kakao.com/?q=${encodeURIComponent(place)}`, '_blank')}>
+                지도 보기 →
+              </button>
+            </div>
+          )}
         </div>
         <div className="input-group">
           <label>날짜</label>
@@ -154,48 +207,83 @@ function VerifyModal({ appointment, onVerify, onClose }: {
   )
 }
 
-function RatingModal({ members, ratings, appt, onRate, onClose }: {
-  members: string[]
-  ratings: Record<string, number>
-  appt?: Appointment
-  onRate: (nickname: string, stars: number) => void
+function PickFavoriteModal({ roomId, memberDetails, currentUserId, currentNickname, myLike, onClose, onPicked }: {
+  roomId: number
+  memberDetails?: MemberDetail[]
+  currentUserId?: number
+  currentNickname?: string
+  myLike?: string
   onClose: () => void
+  onPicked: (nickname: string) => void
 }) {
-  const [local, setLocal] = useState<Record<string, number>>(ratings)
-  const ratable = canRate(appt)
-  const hoursLeft = appt?.accepted
-    ? Math.max(0, Math.ceil((new Date(appt.datetimeISO).getTime() + 4 * 3600000 - Date.now()) / 3600000))
-    : null
+  const [selected, setSelected] = useState(myLike ?? '')
+  const [loading, setLoading] = useState(false)
+  const [done, setDone] = useState(!!myLike)
+
+  const candidates = (memberDetails ?? []).filter(m => m.id !== currentUserId)
+
+  const handleConfirm = async () => {
+    const detail = candidates.find(d => d.nickname === selected)
+    if (!detail) return
+    setLoading(true)
+    try {
+      const res = await api.post<{ matched: boolean; dmRoomId?: number; title?: string }>(
+        `/rooms/${roomId}/like`, { likeeId: detail.id }, true
+      )
+      setDone(true)
+      onPicked(selected)
+      if (res.matched && res.dmRoomId) {
+        setTimeout(() => alert(`💌 서로 선택했어요! "${res.title}" 채팅방이 열렸어요.`), 100)
+      }
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <div className="modal-overlay">
       <div className="modal-box">
         <div className="modal-header">
-          <h3 className="modal-title">⭐ 별점 주기</h3>
+          <h3 className="modal-title">❤️ 맘에 드는 상대</h3>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
-        <div className="rating-notice">🔒 별점은 상대방에게 공개되지 않아요</div>
-        {!ratable && (
-          <div className="rating-locked">
-            {!appt || !appt.accepted
-              ? '약속이 확정된 후 4시간이 지나면\n별점을 줄 수 있어요.'
-              : `약속 후 약 ${hoursLeft}시간이 지나면\n별점을 줄 수 있어요.`}
+        {done ? (
+          <div style={{ textAlign: 'center', padding: '16px 0' }}>
+            <p style={{ fontSize: '2rem' }}>💌</p>
+            <p style={{ fontWeight: 600, marginTop: 8 }}>{selected}님에게 전달됐어요!</p>
+            <p style={{ color: '#888', fontSize: '0.85rem', marginTop: 4 }}>상대방도 선택하면 1:1 대화방이 열려요.</p>
+            <button className="btn-login" style={{ marginTop: 16 }} onClick={onClose}>확인</button>
           </div>
+        ) : (
+          <>
+            <p style={{ fontSize: '0.85rem', color: '#888', marginBottom: 12 }}>한 명만 선택할 수 있어요. 서로 선택하면 1:1 대화방이 열려요!</p>
+            {candidates.length === 0 && (
+              <p style={{ color: '#aaa', textAlign: 'center', padding: '16px 0' }}>선택 가능한 상대가 없어요.</p>
+            )}
+            {candidates.map(m => (
+              <button key={m.id}
+                onClick={() => setSelected(m.nickname)}
+                style={{
+                  width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '12px 16px', borderRadius: '10px', marginBottom: 8,
+                  background: selected === m.nickname ? '#fff0f3' : '#f9f9f9',
+                  border: selected === m.nickname ? '1.5px solid #e84393' : '1.5px solid #eee',
+                  cursor: 'pointer',
+                }}>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontWeight: 600 }}>{m.nickname}</div>
+                  <div style={{ fontSize: '0.8rem', color: '#888' }}>{m.dept}</div>
+                </div>
+                {selected === m.nickname && <span style={{ fontSize: '1.2rem' }}>❤️</span>}
+              </button>
+            ))}
+            <button className="btn-login" disabled={!selected || loading} onClick={handleConfirm} style={{ marginTop: 4 }}>
+              {loading ? '처리 중...' : '선택 완료'}
+            </button>
+          </>
         )}
-        {ratable && members.filter(m => m !== '나').map(nickname => (
-          <div key={nickname} className="rating-row">
-            <span className="rating-name">{nickname}</span>
-            <div className="star-row">
-              {[1, 2, 3, 4, 5].map(s => (
-                <button key={s} className={`star-btn ${(local[nickname] ?? 0) >= s ? 'filled' : ''}`}
-                  onClick={() => { const updated = { ...local, [nickname]: s }; setLocal(updated); onRate(nickname, s) }}>
-                  ★
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-        <button className="btn-login" onClick={onClose}>완료</button>
       </div>
     </div>
   )
@@ -212,7 +300,7 @@ function PlusMenu({ onAppt, onRate, onLeave, onClose }: {
           <span>📍</span><span>약속장소 지정</span>
         </button>
         <button className="plus-menu-item" onClick={() => { onRate(); onClose() }}>
-          <span>⭐</span><span>별점 주기</span>
+          <span>❤️</span><span>맘에 드는 상대</span>
         </button>
         <button className="plus-menu-item danger" onClick={() => { onLeave(); onClose() }}>
           <span>🚪</span><span>채팅방 나가기</span>
@@ -301,14 +389,15 @@ interface RoomProps {
   onSend: (text: string) => void
   onUpdateRoom: (room: ChatRoom) => void
   onLeave: () => void
+  onMutualMatch?: (dmRoomId: number, title: string, otherNickname: string) => void
 }
 
-export function ChatRoomView({ room, currentUserId, currentNickname, onBack, onSend, onUpdateRoom, onLeave }: RoomProps) {
+export function ChatRoomView({ room, currentUserId, currentNickname, onBack, onSend, onUpdateRoom, onLeave, onMutualMatch }: RoomProps) {
   const [input, setInput]               = useState('')
   const [showPlus, setShowPlus]         = useState(false)
   const [showAppModal, setShowAppModal] = useState(false)
   const [showVerify, setShowVerify]     = useState(false)
-  const [showRating, setShowRating]     = useState(false)
+  const [showPick, setShowPick]         = useState(false)
   const [showLeave, setShowLeave]       = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -350,11 +439,16 @@ export function ChatRoomView({ room, currentUserId, currentNickname, onBack, onS
       }
     })
 
+    socket.on('mutual-match-found', (data: { dmRoomId: number; title: string; otherUser: { id: number; nickname: string } }) => {
+      onMutualMatch?.(data.dmRoomId, data.title, data.otherUser.nickname)
+    })
+
     return () => {
       socket.off('new-message')
       socket.off('appointment-updated')
       socket.off('appointment-accepted')
       socket.off('appointment-verified')
+      socket.off('mutual-match-found')
       socket.emit('leave-room', room.id)
     }
   }, [room.id])
@@ -405,13 +499,8 @@ export function ChatRoomView({ room, currentUserId, currentNickname, onBack, onS
     }
   }
 
-  const handleRate = async (nickname: string, stars: number) => {
-    const rateeId = room.memberIds?.[nickname]
-    if (!rateeId) return
-    try {
-      await api.post(`/rooms/${room.id}/ratings`, { rateeId, stars }, true)
-      onUpdateRoom({ ...room, ratings: { ...room.ratings, [nickname]: stars } })
-    } catch { /* 별점 실패 시 무시 */ }
+  const handlePicked = (nickname: string) => {
+    onUpdateRoom({ ...room, myLike: nickname })
   }
 
   const handleSend = () => {
@@ -441,7 +530,7 @@ export function ChatRoomView({ room, currentUserId, currentNickname, onBack, onS
       {showPlus && (
         <PlusMenu
           onAppt={() => setShowAppModal(true)}
-          onRate={() => setShowRating(true)}
+          onRate={() => setShowPick(true)}
           onLeave={() => setShowLeave(true)}
           onClose={() => setShowPlus(false)}
         />
@@ -450,13 +539,15 @@ export function ChatRoomView({ room, currentUserId, currentNickname, onBack, onS
       {showVerify && appt && (
         <VerifyModal appointment={appt} onVerify={handleVerify} onClose={() => setShowVerify(false)} />
       )}
-      {showRating && (
-        <RatingModal
-          members={room.members}
-          ratings={room.ratings}
-          appt={appt}
-          onRate={handleRate}
-          onClose={() => setShowRating(false)}
+      {showPick && (
+        <PickFavoriteModal
+          roomId={room.id}
+          memberDetails={room.memberDetails}
+          currentUserId={currentUserId}
+          currentNickname={currentNickname}
+          myLike={room.myLike}
+          onClose={() => setShowPick(false)}
+          onPicked={handlePicked}
         />
       )}
       {showLeave && <LeaveModal onClose={() => setShowLeave(false)} onLeave={onLeave} />}

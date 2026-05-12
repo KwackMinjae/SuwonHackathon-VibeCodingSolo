@@ -29,6 +29,7 @@ export interface UserInfo {
   nickname: string
   gender: '남' | '여'
   dept: string
+  student_id: string
 }
 
 async function request<T>(

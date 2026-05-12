@@ -9,6 +9,28 @@ interface AuthSocket extends Socket {
   nickname?: string
 }
 
+interface SeekingRoom {
+  capacity: number
+  teamGender: string
+}
+
+// 매칭 대기 중인 방 (roomId → 정보)
+const seekingRooms = new Map<number, SeekingRoom>()
+
+function makeCode() {
+  return String(Math.floor(100000 + Math.random() * 900000))
+}
+
+function findCompatibleRoom(capacity: number, myGender: string): number | null {
+  const oppositeGender = myGender === '남' ? '여' : '남'
+  for (const [roomId, info] of seekingRooms.entries()) {
+    if (info.capacity === capacity && info.teamGender === oppositeGender) {
+      return roomId
+    }
+  }
+  return null
+}
+
 export function setupSocket(io: IOServer) {
   io.use((socket: AuthSocket, next) => {
     const token = socket.handshake.auth?.token as string | undefined
@@ -27,18 +49,90 @@ export function setupSocket(io: IOServer) {
   io.on('connection', (socket: AuthSocket) => {
     console.log(`[Socket] 연결: ${socket.nickname} (${socket.userId})`)
 
-    // 채팅방 입장
+    if (socket.userId) {
+      socket.join(`user:${socket.userId}`)
+    }
+
     socket.on('join-room', (roomId: number) => {
       socket.join(`room:${roomId}`)
       console.log(`[Socket] ${socket.nickname} → room:${roomId}`)
     })
 
-    // 채팅방 퇴장
     socket.on('leave-room', (roomId: number) => {
       socket.leave(`room:${roomId}`)
     })
 
-    // 메시지 전송
+    // 매칭 시작: 상대팀 대기 중인 방이 있으면 즉시 매칭, 없으면 대기
+    socket.on('start-match', ({ roomId }: { roomId: number }) => {
+      const room = db.prepare('SELECT * FROM rooms WHERE id = ?').get(roomId) as {
+        id: number; capacity: number; team_gender: string; status: string; host_id: number
+      } | undefined
+
+      if (!room || room.host_id !== socket.userId) return
+
+      const myGender = room.team_gender
+      const capacity = room.capacity
+
+      const compatibleRoomId = findCompatibleRoom(capacity, myGender)
+
+      if (compatibleRoomId !== null) {
+        // 매칭 성사!
+        seekingRooms.delete(compatibleRoomId)
+
+        const myMembers = db.prepare(`
+          SELECT u.id, u.nickname, u.gender, u.dept, u.email, u.student_id
+          FROM room_members rm JOIN users u ON u.id = rm.user_id
+          WHERE rm.room_id = ?
+        `).all(roomId) as { id: number; nickname: string; gender: string; dept: string; email: string; student_id: string }[]
+
+        const theirMembers = db.prepare(`
+          SELECT u.id, u.nickname, u.gender, u.dept, u.email, u.student_id
+          FROM room_members rm JOIN users u ON u.id = rm.user_id
+          WHERE rm.room_id = ?
+        `).all(compatibleRoomId) as { id: number; nickname: string; gender: string; dept: string; email: string; student_id: string }[]
+
+        const allMembers = [...myMembers, ...theirMembers]
+
+        // 새 매칭 방 생성
+        const title = `${capacity}v${capacity} 과팅`
+        let code = makeCode()
+        while (db.prepare('SELECT id FROM rooms WHERE code = ?').get(code)) code = makeCode()
+
+        const result = db.prepare(
+          'INSERT INTO rooms (title, code, host_id, capacity, team_gender, status) VALUES (?, ?, ?, ?, ?, ?)'
+        ).run(title, code, socket.userId, capacity, myGender, 'active') as { lastInsertRowid: number }
+
+        const matchRoomId = Number(result.lastInsertRowid)
+
+        for (const u of allMembers) {
+          db.prepare('INSERT OR IGNORE INTO room_members (room_id, user_id) VALUES (?, ?)').run(matchRoomId, u.id)
+        }
+        db.prepare('INSERT INTO messages (room_id, user_id, nickname, text, type) VALUES (?, ?, ?, ?, ?)')
+          .run(matchRoomId, null, '시스템', `🎉 ${capacity}v${capacity} 매칭이 완료되었어요!`, 'system')
+
+        db.prepare("UPDATE rooms SET status = 'closed' WHERE id IN (?, ?)").run(roomId, compatibleRoomId)
+
+        const payload = { roomId: matchRoomId, members: allMembers, size: capacity, teamGender: myGender }
+        io.to(`room:${roomId}`).emit('match-started', payload)
+        io.to(`room:${compatibleRoomId}`).emit('match-started', payload)
+
+        console.log(`[Socket] 매칭 성사: room${roomId} + room${compatibleRoomId} → room${matchRoomId}`)
+      } else {
+        // 대기 큐에 추가
+        seekingRooms.set(roomId, { capacity, teamGender: myGender })
+        db.prepare("UPDATE rooms SET status = 'seeking' WHERE id = ?").run(roomId)
+        io.to(`room:${roomId}`).emit('match-seeking', { roomId })
+        console.log(`[Socket] 매칭 대기: room${roomId} (${myGender}자 ${capacity}v${capacity})`)
+      }
+    })
+
+    // 매칭 취소
+    socket.on('cancel-match', ({ roomId }: { roomId: number }) => {
+      seekingRooms.delete(roomId)
+      db.prepare("UPDATE rooms SET status = 'waiting' WHERE id = ?").run(roomId)
+      console.log(`[Socket] 매칭 취소: room${roomId}`)
+    })
+
     socket.on('send-message', (data: { roomId: number; text: string }) => {
       const { roomId, text } = data
       if (!text?.trim() || !roomId) return
@@ -64,18 +158,15 @@ export function setupSocket(io: IOServer) {
       })
     })
 
-    // 약속 설정 알림
     socket.on('appointment-set', (data: { roomId: number; place: string; datetimeISO: string }) => {
       const { roomId } = data
       io.to(`room:${roomId}`).emit('appointment-updated', { ...data, accepted: false, verified: false })
     })
 
-    // 약속 수락 알림
     socket.on('appointment-accept', (roomId: number) => {
       io.to(`room:${roomId}`).emit('appointment-accepted', { roomId })
     })
 
-    // 만남 인증 알림
     socket.on('appointment-verify', (roomId: number) => {
       io.to(`room:${roomId}`).emit('appointment-verified', { roomId })
     })

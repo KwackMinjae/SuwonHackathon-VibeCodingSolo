@@ -22,7 +22,6 @@ export default function SignupScreen({ onBack, onComplete }: Props) {
   const [loading, setLoading] = useState(false)
 
   const [emailId, setEmailId] = useState('')
-  const [sentCode, setSentCode] = useState('')
   const [inputCode, setInputCode] = useState('')
   const [codeError, setCodeError] = useState('')
 
@@ -31,19 +30,16 @@ export default function SignupScreen({ onBack, onComplete }: Props) {
   const [password, setPassword] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
   const [department, setDepartment] = useState('')
+  const [studentIdInput, setStudentIdInput] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
-
-  const studentId = emailId.slice(0, 2)
 
   const sendCode = async () => {
     setLoading(true)
     try {
-      const data = await api.post<{ code: string }>('/auth/send-code', { email: emailId, type: 'signup' })
-      setSentCode(data.code)
+      await api.post('/auth/send-code', { email: emailId, type: 'signup' })
       setInputCode('')
       setCodeError('')
       setStep('verify')
-      alert(`[개발 테스트용]\n${emailId}@suwon.ac.kr 로 인증번호가 전송됐어요.\n인증번호: ${data.code}`)
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : '전송에 실패했습니다.')
     } finally {
@@ -52,14 +48,13 @@ export default function SignupScreen({ onBack, onComplete }: Props) {
   }
 
   const verifyCode = async () => {
-    if (inputCode !== sentCode) { setCodeError('인증번호를 확인해주세요.'); return }
     setLoading(true)
     try {
       await api.post('/auth/verify-code', { email: emailId, code: inputCode, type: 'signup' })
       setCodeError('')
       setStep('info')
     } catch (e: unknown) {
-      setCodeError(e instanceof Error ? e.message : '인증에 실패했습니다.')
+      setCodeError(e instanceof Error ? e.message : '인증번호가 올바르지 않습니다.')
     } finally {
       setLoading(false)
     }
@@ -73,6 +68,7 @@ export default function SignupScreen({ onBack, onComplete }: Props) {
     if (password.length < 8) newErrors.password = '비밀번호는 8자 이상이어야 해요.'
     if (password !== confirmPw) newErrors.confirmPw = '비밀번호가 일치하지 않아요.'
     if (!department) newErrors.department = '학과를 선택해주세요.'
+    if (!studentIdInput) newErrors.studentId = '학번을 입력해주세요.'
     setErrors(newErrors)
     if (Object.keys(newErrors).length > 0) return
 
@@ -84,6 +80,7 @@ export default function SignupScreen({ onBack, onComplete }: Props) {
         nickname,
         gender,
         dept: department,
+        student_id: studentIdInput,
       })
       setToken(data.token)
       storeUser(data.user)
@@ -207,7 +204,14 @@ export default function SignupScreen({ onBack, onComplete }: Props) {
 
           <div className="input-group">
             <label>학번</label>
-            <div className="student-id-box">{studentId}학번</div>
+            <input
+              type="text"
+              placeholder="학번 입력 (예: 20120001)"
+              value={studentIdInput}
+              onChange={e => { setStudentIdInput(e.target.value); setErrors(p => ({ ...p, studentId: '' })) }}
+              className={`pw-input ${errors.studentId ? 'error' : ''}`}
+            />
+            {errors.studentId && <p className="error-msg">{errors.studentId}</p>}
           </div>
 
           <div className="input-group">

@@ -5,7 +5,7 @@ import RandomMatchScreen, { UserProfile, MockUser } from './RandomMatchScreen'
 import { api } from '../api/client'
 
 type Tab = '과팅' | '채팅방' | '설정'
-type SubScreen = null | 'random-create' | 'random-join' | 'random-instant' | 'chatroom'
+type SubScreen = null | 'random-create' | 'random-join' | 'chatroom'
 
 export interface PublicRoom {
   id: number
@@ -35,13 +35,17 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
   const [sub, setSub]           = useState<SubScreen>(null)
   const [chatRooms, setChatRooms]   = useState<ChatRoom[]>([])
   const [activeRoom, setActiveRoom] = useState<ChatRoom | null>(null)
-  const [publicRooms, setPublicRooms] = useState<PublicRoom[]>([])
 
   const handleMatchSuccess = (matchedUsers: MockUser[], size: number, roomId?: number) => {
     const t = nowTime()
     const members = [currentUser.nickname, ...matchedUsers.map(u => u.nickname)]
     const memberIds: Record<string, number> = {}
     matchedUsers.forEach(u => { if (u.id) memberIds[u.nickname] = u.id })
+
+    const memberDetails = [
+      { id: currentUser.id!, nickname: currentUser.nickname, gender: currentUser.gender, dept: currentUser.dept },
+      ...matchedUsers.map(u => ({ id: u.id!, nickname: u.nickname, gender: u.gender, dept: u.dept })),
+    ]
 
     const systemMsg: ChatMessage = {
       id: Date.now(),
@@ -50,50 +54,17 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
       senderName: '시스템',
       time: t,
     }
-    const introMsgs: ChatMessage[] = matchedUsers.map((u, i) => ({
-      id: Date.now() + i + 1,
-      text: `안녕하세요! 저는 ${u.nickname}이에요 😊`,
-      isMine: false,
-      senderName: u.nickname,
-      time: t,
-    }))
     const newRoom: ChatRoom = {
       id: roomId ?? Date.now() + 1000,
       title: `${size}v${size} 매칭`,
-      messages: [systemMsg, ...introMsgs],
+      messages: [systemMsg],
       capacity: size * 2,
       memberCount: size * 2,
       members,
       memberIds,
+      memberDetails,
       ratings: {},
     }
-    setChatRooms(prev => [...prev, newRoom])
-    setActiveRoom(newRoom)
-    setSub('chatroom')
-    setTab('채팅방')
-  }
-
-  const handleRoomCreated = (room: PublicRoom) => {
-    setPublicRooms(prev => [...prev, room])
-  }
-
-  const handleJoinPublicRoom = async (pubRoom: PublicRoom) => {
-    try {
-      await api.post('/rooms/join', { code: pubRoom.code }, true)
-    } catch { /* 이미 가입됐을 수도 있음 */ }
-    const t = nowTime()
-    const newRoom: ChatRoom = {
-      id: pubRoom.id,
-      title: pubRoom.title,
-      messages: [{ id: Date.now(), text: '채팅방에 참여했어요! 인사를 건네보세요 👋', isMine: false, time: t }],
-      capacity: pubRoom.capacity,
-      memberCount: pubRoom.memberCount + 1,
-      members: [currentUser.nickname],
-      ratings: {},
-    }
-    setPublicRooms(prev => prev.map(r =>
-      r.id === pubRoom.id ? { ...r, memberCount: r.memberCount + 1 } : r
-    ).filter(r => r.memberCount < r.capacity))
     setChatRooms(prev => [...prev, newRoom])
     setActiveRoom(newRoom)
     setSub('chatroom')
@@ -141,7 +112,6 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
       onBack={() => setSub(null)}
       currentUser={currentUser}
       onMatchSuccess={handleMatchSuccess}
-      onRoomCreated={handleRoomCreated}
       initialView="host-setup"
     />
   )
@@ -150,21 +120,28 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
       onBack={() => setSub(null)}
       currentUser={currentUser}
       onMatchSuccess={handleMatchSuccess}
-      onRoomCreated={handleRoomCreated}
-      publicRooms={publicRooms}
-      onJoinPublicRoom={handleJoinPublicRoom}
       initialView="join-input"
     />
   )
-  if (sub === 'random-instant') return (
-    <RandomMatchScreen
-      onBack={() => setSub(null)}
-      currentUser={currentUser}
-      onMatchSuccess={handleMatchSuccess}
-      onRoomCreated={handleRoomCreated}
-      initialView="instant"
-    />
-  )
+  const handleMutualMatch = (dmRoomId: number, title: string, otherNickname: string) => {
+    const newRoom: ChatRoom = {
+      id: dmRoomId,
+      title,
+      messages: [],
+      capacity: 2,
+      memberCount: 2,
+      members: [currentUser.nickname, otherNickname],
+      ratings: {},
+    }
+    setChatRooms(prev => {
+      if (prev.some(r => r.id === dmRoomId)) return prev
+      return [...prev, newRoom]
+    })
+    setActiveRoom(newRoom)
+    setSub('chatroom')
+    setTab('채팅방')
+  }
+
   if (sub === 'chatroom' && activeRoom) return (
     <ChatRoomView
       room={activeRoom}
@@ -174,6 +151,7 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
       onSend={handleSend}
       onUpdateRoom={handleUpdateRoom}
       onLeave={handleLeave}
+      onMutualMatch={handleMutualMatch}
     />
   )
 
@@ -184,7 +162,7 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
       </div>
 
       <div className="main-content">
-        {tab === '과팅'  && <GatingTab onCreate={() => setSub('random-create')} onJoin={() => setSub('random-join')} onInstant={() => setSub('random-instant')} />}
+        {tab === '과팅'  && <GatingTab onCreate={() => setSub('random-create')} onJoin={() => setSub('random-join')} />}
         {tab === '채팅방' && <ChatList rooms={chatRooms} onOpenRoom={handleOpenRoom} />}
         {tab === '설정'  && (
           <SettingsTab
@@ -231,7 +209,7 @@ function navIcon(tab: Tab) {
   )
 }
 
-function GatingTab({ onCreate, onJoin, onInstant }: { onCreate: () => void; onJoin: () => void; onInstant: () => void }) {
+function GatingTab({ onCreate, onJoin }: { onCreate: () => void; onJoin: () => void }) {
   return (
     <div className="gating-tab">
       <div className="gating-header">
@@ -242,7 +220,7 @@ function GatingTab({ onCreate, onJoin, onInstant }: { onCreate: () => void; onJo
           <div className="card-icon">🏠</div>
           <div className="card-text">
             <span className="card-title">방 만들기</span>
-            <span className="card-desc">방을 개설하고 고유 번호로<br />친구를 초대하세요</span>
+            <span className="card-desc">혼자라면 빠르게 합류!<br />친구와는 팀으로!</span>
           </div>
           <span className="card-arrow">›</span>
         </button>
@@ -251,14 +229,6 @@ function GatingTab({ onCreate, onJoin, onInstant }: { onCreate: () => void; onJo
           <div className="card-text">
             <span className="card-title">방 참여하기</span>
             <span className="card-desc">방 번호를 입력해서<br />과팅방에 입장하세요</span>
-          </div>
-          <span className="card-arrow">›</span>
-        </button>
-        <button className="gating-card card-instant" onClick={onInstant}>
-          <div className="card-icon">🎲</div>
-          <div className="card-text">
-            <span className="card-title">랜덤매칭</span>
-            <span className="card-desc">인원 설정 후 즉시<br />랜덤으로 매칭해드려요</span>
           </div>
           <span className="card-arrow">›</span>
         </button>

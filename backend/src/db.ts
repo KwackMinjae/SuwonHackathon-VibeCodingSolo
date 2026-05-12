@@ -93,6 +93,23 @@ db.exec(`
     joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
+
+  CREATE TABLE IF NOT EXISTS likes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    room_id INTEGER NOT NULL,
+    liker_id INTEGER NOT NULL,
+    likee_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (room_id, liker_id),
+    FOREIGN KEY (room_id) REFERENCES rooms(id),
+    FOREIGN KEY (liker_id) REFERENCES users(id),
+    FOREIGN KEY (likee_id) REFERENCES users(id)
+  );
 `)
+
+// student_id 컬럼 마이그레이션 (기존 DB 호환)
+try {
+  db.exec(`ALTER TABLE users ADD COLUMN student_id TEXT NOT NULL DEFAULT ''`)
+} catch { /* already exists */ }
 
 export default db

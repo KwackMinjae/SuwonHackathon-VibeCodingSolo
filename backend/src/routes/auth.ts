@@ -6,20 +6,25 @@ import { signToken } from '../middleware/auth'
 
 const router = Router()
 
-async function getTransporter() {
-  const testAccount = await nodemailer.createTestAccount()
-  return nodemailer.createTransport({
-    host: 'smtp.ethereal.email',
-    port: 587,
-    auth: { user: testAccount.user, pass: testAccount.pass },
-  })
-}
-
 function generateCode() {
   return String(Math.floor(100000 + Math.random() * 900000))
 }
 
-// 인증코드 전송 (회원가입 / 비밀번호 재설정 공통)
+function getTransporter() {
+  const user = process.env.SMTP_USER
+  const pass = process.env.SMTP_PASS
+
+  if (!user || !pass) {
+    throw new Error('SMTP_USER, SMTP_PASS 환경변수를 설정해주세요.')
+  }
+
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user, pass },
+  })
+}
+
+// 인증코드 전송
 router.post('/send-code', async (req: Request, res: Response) => {
   const { email, type } = req.body as { email: string; type: 'signup' | 'reset' }
   if (!email || !type) return res.status(400).json({ message: '이메일과 타입이 필요합니다.' })
@@ -37,30 +42,36 @@ router.post('/send-code', async (req: Request, res: Response) => {
   }
 
   const code = generateCode()
-  const expiresAt = Date.now() + 10 * 60 * 1000 // 10분
+  const expiresAt = Date.now() + 10 * 60 * 1000
 
   db.prepare('DELETE FROM verification_codes WHERE email = ? AND type = ?').run(email, type)
   db.prepare(
     'INSERT INTO verification_codes (email, code, type, expires_at) VALUES (?, ?, ?, ?)'
   ).run(email, code, type, expiresAt)
 
-  // 이메일 전송 시도
   try {
-    const transporter = await getTransporter()
-    const info = await transporter.sendMail({
-      from: '"수원시그널" <no-reply@suwon-signal.kr>',
+    const transporter = getTransporter()
+    await transporter.sendMail({
+      from: `"수원시그널" <${process.env.SMTP_USER}>`,
       to: fullEmail,
-      subject: '[수원시그널] 인증번호 안내',
-      text: `인증번호: ${code}\n10분 이내에 입력해주세요.`,
+      subject: '[수원시그널] 이메일 인증번호',
+      html: `
+        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; border: 1px solid #eee; border-radius: 12px;">
+          <h2 style="color: #1a8fa0; margin-bottom: 8px;">수원시그널</h2>
+          <p style="color: #444; margin-bottom: 24px;">아래 인증번호를 입력해주세요. <strong>10분</strong> 이내에 사용해야 합니다.</p>
+          <div style="background: #f0f9fa; border-radius: 8px; padding: 24px; text-align: center; letter-spacing: 8px; font-size: 32px; font-weight: bold; color: #1a8fa0;">
+            ${code}
+          </div>
+          <p style="color: #999; font-size: 12px; margin-top: 24px;">본인이 요청하지 않은 경우 이 메일을 무시하세요.</p>
+        </div>
+      `,
     })
-    console.log(`[EMAIL] 인증코드 발송: ${fullEmail} → ${code}`)
-    console.log(`[EMAIL] 미리보기: ${nodemailer.getTestMessageUrl(info)}`)
+    console.log(`[EMAIL] 발송 완료: ${fullEmail}`)
+    return res.json({ message: '인증번호가 전송되었습니다.' })
   } catch (e) {
-    console.log(`[EMAIL] 발송 실패 (코드: ${code}) → ${fullEmail}`)
+    console.error('[EMAIL] 발송 실패:', e)
+    return res.status(500).json({ message: '이메일 발송에 실패했습니다. 잠시 후 다시 시도해주세요.' })
   }
-
-  // 개발 편의: 응답에 코드 포함
-  return res.json({ message: '인증번호가 전송되었습니다.', code })
 })
 
 // 인증코드 확인
@@ -82,8 +93,8 @@ router.post('/verify-code', (req: Request, res: Response) => {
 
 // 회원가입
 router.post('/register', async (req: Request, res: Response) => {
-  const { email, password, nickname, gender, dept } = req.body as {
-    email: string; password: string; nickname: string; gender: string; dept: string
+  const { email, password, nickname, gender, dept, student_id } = req.body as {
+    email: string; password: string; nickname: string; gender: string; dept: string; student_id?: string
   }
 
   if (!email || !password || !nickname || !gender || !dept) {
@@ -101,16 +112,17 @@ router.post('/register', async (req: Request, res: Response) => {
   if (existing) return res.status(409).json({ message: '이미 가입된 이메일입니다.' })
 
   const passwordHash = await bcrypt.hash(password, 10)
+  const sid = student_id?.trim() ?? ''
   const result = db.prepare(
-    'INSERT INTO users (email, password_hash, nickname, gender, dept) VALUES (?, ?, ?, ?, ?)'
-  ).run(email, passwordHash, nickname, gender, dept) as { lastInsertRowid: number }
+    'INSERT INTO users (email, password_hash, nickname, gender, dept, student_id) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(email, passwordHash, nickname, gender, dept, sid) as { lastInsertRowid: number }
 
   const userId = Number(result.lastInsertRowid)
   const token = signToken(userId, email)
 
   return res.status(201).json({
     token,
-    user: { id: userId, email, nickname, gender, dept },
+    user: { id: userId, email, nickname, gender, dept, student_id: sid },
   })
 })
 
@@ -120,7 +132,7 @@ router.post('/login', async (req: Request, res: Response) => {
   if (!email || !password) return res.status(400).json({ message: '이메일과 비밀번호를 입력해주세요.' })
 
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as {
-    id: number; email: string; password_hash: string; nickname: string; gender: string; dept: string
+    id: number; email: string; password_hash: string; nickname: string; gender: string; dept: string; student_id: string
   } | undefined
 
   if (!user) return res.status(401).json({ message: '이메일 또는 비밀번호가 올바르지 않습니다.' })
@@ -131,7 +143,7 @@ router.post('/login', async (req: Request, res: Response) => {
   const token = signToken(user.id, user.email)
   return res.json({
     token,
-    user: { id: user.id, email: user.email, nickname: user.nickname, gender: user.gender, dept: user.dept },
+    user: { id: user.id, email: user.email, nickname: user.nickname, gender: user.gender, dept: user.dept, student_id: user.student_id ?? '' },
   })
 })
 

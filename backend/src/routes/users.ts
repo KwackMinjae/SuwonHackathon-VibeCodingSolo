@@ -9,8 +9,8 @@ router.use(authMiddleware)
 // 내 정보 조회
 router.get('/me', (req: AuthRequest, res: Response) => {
   const user = db.prepare(
-    'SELECT id, email, nickname, gender, dept, created_at FROM users WHERE id = ?'
-  ).get(req.userId) as { id: number; email: string; nickname: string; gender: string; dept: string; created_at: string } | undefined
+    'SELECT id, email, nickname, gender, dept, student_id, created_at FROM users WHERE id = ?'
+  ).get(req.userId) as { id: number; email: string; nickname: string; gender: string; dept: string; student_id: string; created_at: string } | undefined
 
   if (!user) return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' })
   return res.json({ user })
@@ -54,9 +54,27 @@ router.delete('/me', async (req: AuthRequest, res: Response) => {
   const valid = await bcrypt.compare(password, user.password_hash)
   if (!valid) return res.status(401).json({ message: '비밀번호가 올바르지 않습니다.' })
 
-  db.prepare('DELETE FROM room_members WHERE user_id = ?').run(req.userId)
-  db.prepare('DELETE FROM match_queue WHERE user_id = ?').run(req.userId)
-  db.prepare('DELETE FROM users WHERE id = ?').run(req.userId)
+  const uid = req.userId!
+
+  // likes FK 제거
+  db.prepare('DELETE FROM likes WHERE liker_id = ? OR likee_id = ?').run(uid, uid)
+
+  // 내가 방장인 방의 관련 데이터 모두 제거 (FK 순서 준수)
+  const hostedRooms = db.prepare('SELECT id FROM rooms WHERE host_id = ?').all(uid) as { id: number }[]
+  for (const room of hostedRooms) {
+    db.prepare('DELETE FROM likes WHERE room_id = ?').run(room.id)
+    db.prepare('DELETE FROM ratings WHERE room_id = ?').run(room.id)
+    db.prepare('DELETE FROM appointments WHERE room_id = ?').run(room.id)
+    db.prepare('DELETE FROM messages WHERE room_id = ?').run(room.id)
+    db.prepare('DELETE FROM room_members WHERE room_id = ?').run(room.id)
+  }
+  db.prepare('DELETE FROM rooms WHERE host_id = ?').run(uid)
+
+  // 다른 방의 멤버십 제거
+  db.prepare('DELETE FROM room_members WHERE user_id = ?').run(uid)
+  db.prepare('DELETE FROM match_queue WHERE user_id = ?').run(uid)
+  db.prepare('DELETE FROM users WHERE id = ?').run(uid)
+
   return res.json({ message: '계정이 삭제되었습니다.' })
 })
 
