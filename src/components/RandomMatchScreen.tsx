@@ -423,14 +423,9 @@ export default function RandomMatchScreen({
       </div>
 
       {isHostOfRoom ? (
-        <button
-          className="btn-login"
-          onClick={handleStartMatch}
-          disabled={myTeamMembers.length < matchSize}
-          style={myTeamMembers.length < matchSize ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
-        >
+        <button className="btn-login" onClick={handleStartMatch}>
           {myTeamMembers.length < matchSize
-            ? `팀원을 모아주세요 (${myTeamMembers.length}/${matchSize}명)`
+            ? `매칭 시작하기 💘 (${myTeamMembers.length}/${matchSize}명)`
             : '매칭 시작하기 💘'}
         </button>
       ) : (

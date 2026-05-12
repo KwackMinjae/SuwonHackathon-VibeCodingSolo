@@ -22,10 +22,11 @@ function makeCode() {
   return String(Math.floor(100000 + Math.random() * 900000))
 }
 
-function findCompatibleRoom(capacity: number, myGender: string, myMemberCount: number): number | null {
+// 상대팀이 정원을 채운 경우에만 매칭 가능
+function findCompatibleRoom(capacity: number, myGender: string): number | null {
   const oppositeGender = myGender === '남' ? '여' : '남'
   for (const [roomId, info] of seekingRooms.entries()) {
-    if (info.capacity === capacity && info.teamGender === oppositeGender && info.memberCount === myMemberCount) {
+    if (info.capacity === capacity && info.teamGender === oppositeGender && info.memberCount === capacity) {
       return roomId
     }
   }
@@ -77,15 +78,10 @@ export function setupSocket(io: IOServer) {
       // 실제 현재 인원수 기준으로 매칭
       const myMemberCount = (db.prepare('SELECT COUNT(*) AS cnt FROM room_members WHERE room_id = ?').get(roomId) as { cnt: number }).cnt
 
-      // 팀 정원이 차지 않으면 매칭 불가
-      if (myMemberCount < capacity) {
-        socket.emit('match-error', { message: `팀원이 부족합니다. (${myMemberCount}/${capacity}명)` })
-        return
-      }
+      const compatibleRoomId = findCompatibleRoom(capacity, myGender)
 
-      const compatibleRoomId = findCompatibleRoom(capacity, myGender, myMemberCount)
-
-      if (compatibleRoomId !== null) {
+      // 양쪽 팀 모두 정원을 채웠을 때만 매칭 성사
+      if (compatibleRoomId !== null && myMemberCount === capacity) {
         // 매칭 성사!
         seekingRooms.delete(compatibleRoomId)
 
