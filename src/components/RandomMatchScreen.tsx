@@ -334,10 +334,10 @@ export default function RandomMatchScreen({
   }
 
   const handleStartQuickMatch = () => {
-    const socket = getSocket()
-    socket.emit('solo-queue-join', { matchSize: quickMatchSize })
-    setQueueStatus({ myCount: 0, theirCount: 0, needed: quickMatchSize })
+    // 본인이 큐에 들어가므로 myCount를 1로 미리 표시 (서버 응답으로 덮어써짐)
+    setQueueStatus({ myCount: 1, theirCount: 0, needed: quickMatchSize })
     setQuickMatchActive(true)
+    getSocket().emit('solo-queue-join', { matchSize: quickMatchSize })
   }
 
   const handleLeaveQuickMatch = () => {
