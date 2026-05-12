@@ -34,7 +34,7 @@ export interface TeamState {
   isSeeking: boolean
 }
 
-type View = 'host-setup' | 'host-wait' | 'seeking' | 'join-input' | 'join-wait' | 'result'
+type View = 'host-setup' | 'host-wait' | 'seeking' | 'join-input' | 'join-wait' | 'result' | 'quick-match'
 
 interface MatchResult {
   myTeam: MockUser[]
@@ -90,6 +90,11 @@ export default function RandomMatchScreen({
   const [loading, setLoading]   = useState(false)
   const [kickingIdx, setKickingIdx] = useState<number | null>(null)
 
+  // 빠른 매칭 상태
+  const [quickMatchSize, setQuickMatchSize] = useState(2)
+  const [quickMatchActive, setQuickMatchActive] = useState(false)
+  const [queueStatus, setQueueStatus] = useState({ myCount: 0, theirCount: 0, needed: 2 })
+
   // 최신 값을 effect 클로저 안에서 참조하기 위한 ref
   const goToMainRef = useRef(onGoToMain)
   useEffect(() => { goToMainRef.current = onGoToMain }, [onGoToMain])
@@ -123,6 +128,28 @@ export default function RandomMatchScreen({
     const others = data.members.filter(m => m.id !== currentUser.id).map(toMockUser)
     onMatchSuccess(others, data.size, data.roomId)
   }, [currentUser, onMatchSuccess, myGender])
+
+  // 빠른 매칭 소켓
+  useEffect(() => {
+    if (view !== 'quick-match' || !quickMatchActive) return
+    const socket = getSocket()
+
+    const onStatus = (data: { myCount: number; theirCount: number; needed: number }) => {
+      setQueueStatus(data)
+    }
+    const onMatchStarted = (data: MatchStartedPayload) => {
+      setQuickMatchActive(false)
+      processMatchResult(data)
+    }
+
+    socket.on('solo-queue-status', onStatus)
+    socket.on('match-started', onMatchStarted)
+
+    return () => {
+      socket.off('solo-queue-status', onStatus)
+      socket.off('match-started', onMatchStarted)
+    }
+  }, [view, quickMatchActive, processMatchResult])
 
   // host-wait 소켓
   useEffect(() => {
@@ -304,6 +331,19 @@ export default function RandomMatchScreen({
       isHost: isHostOfRoom,
       isSeeking: view === 'seeking',
     })
+  }
+
+  const handleStartQuickMatch = () => {
+    const socket = getSocket()
+    socket.emit('solo-queue-join', { matchSize: quickMatchSize })
+    setQueueStatus({ myCount: 0, theirCount: 0, needed: quickMatchSize })
+    setQuickMatchActive(true)
+  }
+
+  const handleLeaveQuickMatch = () => {
+    const socket = getSocket()
+    socket.emit('solo-queue-leave', { matchSize: quickMatchSize })
+    setQuickMatchActive(false)
   }
 
   const handleKick = async (memberNickname: string, idx: number) => {
@@ -567,5 +607,80 @@ export default function RandomMatchScreen({
     </div>
   )
 
+  if (view === 'quick-match') return (
+    <div className="match-wrap">
+      <button className="btn-back" onClick={() => { handleLeaveQuickMatch(); onBack() }}>← 뒤로</button>
+      <h2 className="match-title">빠른 매칭</h2>
+      <p className="step-desc">혼자 참여해도 자동으로 팀이 구성돼요!</p>
+
+      {!quickMatchActive ? (
+        <>
+          <div className="input-group">
+            <label>미팅 인원</label>
+            <div className="match-size-row">
+              {[2, 3, 4].map(n => (
+                <button key={n}
+                  className={`match-size-btn ${quickMatchSize === n ? 'selected' : ''}`}
+                  onClick={() => setQuickMatchSize(n)}>
+                  {n}v{n}
+                </button>
+              ))}
+            </div>
+            <p className="step-desc" style={{ marginTop: 8 }}>
+              {myGender}자 {quickMatchSize}명 + {otherGender}자 {quickMatchSize}명이 모이면 자동 매칭
+            </p>
+          </div>
+          <button className="btn-login" onClick={handleStartQuickMatch}>
+            빠른 매칭 시작 💘
+          </button>
+        </>
+      ) : (
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, paddingTop: 24 }}>
+            <div style={{ fontSize: '3rem', animation: 'heartSpin 1s linear infinite' }}>💘</div>
+            <h3 style={{ margin: 0, fontWeight: 700 }}>매칭 대기 중...</h3>
+
+            <div style={{ width: '100%', background: '#f5f5f5', borderRadius: 16, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <QueueBar
+                label={`우리 팀 (${myGender}자)`}
+                count={queueStatus.myCount}
+                needed={queueStatus.needed}
+                color="#5b87ff"
+              />
+              <QueueBar
+                label={`상대 팀 (${otherGender}자)`}
+                count={queueStatus.theirCount}
+                needed={queueStatus.needed}
+                color="#ff6b9d"
+              />
+            </div>
+
+            <p className="step-desc" style={{ textAlign: 'center' }}>
+              {quickMatchSize}v{quickMatchSize} · 양쪽 모두 {quickMatchSize}명이 모이면 자동으로 매칭돼요
+            </p>
+          </div>
+          <button className="btn-signup" onClick={handleLeaveQuickMatch} style={{ marginTop: 8, width: '100%' }}>
+            매칭 취소
+          </button>
+        </>
+      )}
+    </div>
+  )
+
   return null
+}
+
+function QueueBar({ label, count, needed, color }: { label: string; count: number; needed: number; color: string }) {
+  const pct = Math.min((count / needed) * 100, 100)
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: '0.88rem', fontWeight: 600 }}>
+        <span>{label}</span>
+        <span style={{ color }}>{count} / {needed}명</span>
+      </div>
+      <div style={{ height: 10, borderRadius: 6, background: '#e0e0e0', overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 6, transition: 'width 0.4s ease' }} />
+      </div>
+    </div>
+  )
 }

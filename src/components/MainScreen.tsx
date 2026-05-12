@@ -6,7 +6,7 @@ import { api } from '../api/client'
 import { getSocket } from '../api/socket'
 
 type Tab = '과팅' | '채팅방' | '설정'
-type SubScreen = null | 'random-create' | 'random-join' | 'chatroom'
+type SubScreen = null | 'random-create' | 'random-join' | 'quick-match' | 'chatroom'
 
 export interface PublicRoom {
   id: number
@@ -210,6 +210,15 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
       initialView="join-input"
     />
   )
+  if (sub === 'quick-match') return (
+    <RandomMatchScreen
+      onBack={() => setSub(null)}
+      onGoToMain={handleGoToMain}
+      currentUser={currentUser}
+      onMatchSuccess={handleMatchSuccess}
+      initialView="quick-match"
+    />
+  )
   if (sub === 'chatroom' && activeRoom) return (
     <ChatRoomView
       room={activeRoom}
@@ -232,6 +241,7 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
       <div className="main-content">
         {tab === '과팅'  && (
           <GatingTab
+            onQuick={() => setSub('quick-match')}
             onCreate={() => { setTeamState(null); setSub('random-create') }}
             onJoin={() => setSub('random-join')}
           />
@@ -337,22 +347,30 @@ function navIcon(tab: Tab) {
   )
 }
 
-function GatingTab({ onCreate, onJoin }: { onCreate: () => void; onJoin: () => void }) {
+function GatingTab({ onCreate, onJoin, onQuick }: { onCreate: () => void; onJoin: () => void; onQuick: () => void }) {
   return (
     <div className="gating-tab">
       <div className="gating-header">
         <p className="gating-subtitle">설레는 과팅을 시작해보세요 💙</p>
       </div>
       <div className="gating-cards">
+        <button className="gating-card card-random" onClick={onQuick}>
+          <div className="card-icon">💘</div>
+          <div className="card-text">
+            <span className="card-title">빠른 매칭</span>
+            <span className="card-desc">혼자 참여해도 OK!<br />자동으로 팀이 구성돼요</span>
+          </div>
+          <span className="card-arrow">›</span>
+        </button>
         <button className="gating-card card-notice" onClick={onCreate}>
           <div className="card-icon">🏠</div>
           <div className="card-text">
             <span className="card-title">방 만들기</span>
-            <span className="card-desc">혼자라면 빠르게 합류!<br />친구와는 팀으로!</span>
+            <span className="card-desc">친구와 함께 팀을 만들고<br />코드로 초대하세요</span>
           </div>
           <span className="card-arrow">›</span>
         </button>
-        <button className="gating-card card-random" onClick={onJoin}>
+        <button className="gating-card card-notice" onClick={onJoin}>
           <div className="card-icon">🚪</div>
           <div className="card-text">
             <span className="card-title">방 참여하기</span>
