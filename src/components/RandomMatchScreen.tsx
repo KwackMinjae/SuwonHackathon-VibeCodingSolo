@@ -401,29 +401,34 @@ export default function RandomMatchScreen({
   )
 
   if (view === 'seeking') return (
-    <div className="match-wrap" style={{ alignItems: 'center', justifyContent: 'center', gap: 20 }}>
-      <div style={{ fontSize: '3.5rem', animation: 'heartSpin 1s linear infinite' }}>💘</div>
-      <h2 className="match-title" style={{ textAlign: 'center' }}>상대팀을 찾고 있어요...</h2>
-      <p className="step-desc" style={{ textAlign: 'center' }}>
-        {otherGender}자팀이 준비되면<br />자동으로 매칭돼요!
-      </p>
-      {isHostOfRoom && (
-        <button className="btn-signup" onClick={handleCancelMatch} style={{ marginTop: 8 }}>
-          매칭 취소
+    <div className="match-wrap">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <button className="btn-back" style={{ position: 'static', margin: 0 }} onClick={handleLeaveRoom}>
+          ← 방 나가기
         </button>
-      )}
-      <button
-        style={{ marginTop: 4, background: 'none', border: 'none', color: '#888', fontSize: '0.84rem', cursor: 'pointer', padding: '6px 12px' }}
-        onClick={handleGoToMain}
-      >
-        메인화면으로 → (매칭은 계속 진행)
-      </button>
-      <button
-        style={{ background: 'none', border: 'none', color: '#bbb', fontSize: '0.78rem', cursor: 'pointer' }}
-        onClick={handleLeaveRoom}
-      >
-        방 나가기
-      </button>
+        <button
+          style={{ background: 'none', border: 'none', color: '#888', fontSize: '0.82rem', cursor: 'pointer' }}
+          onClick={handleGoToMain}
+        >
+          메인화면으로 →
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, flex: 1, paddingTop: 40 }}>
+        <div style={{ fontSize: '3.5rem', animation: 'heartSpin 1s linear infinite' }}>💘</div>
+        <h2 className="match-title" style={{ textAlign: 'center' }}>상대팀을 찾고 있어요...</h2>
+        <p className="step-desc" style={{ textAlign: 'center' }}>
+          {otherGender}자팀이 준비되면<br />자동으로 매칭돼요!
+        </p>
+        <p style={{ fontSize: '0.8rem', color: '#aaa', textAlign: 'center', marginTop: -8 }}>
+          채팅방을 이용하려면 상단의 '메인화면으로'를 탭하세요
+        </p>
+        {isHostOfRoom && (
+          <button className="btn-signup" onClick={handleCancelMatch} style={{ marginTop: 8, width: '100%' }}>
+            매칭 취소
+          </button>
+        )}
+      </div>
     </div>
   )
 
