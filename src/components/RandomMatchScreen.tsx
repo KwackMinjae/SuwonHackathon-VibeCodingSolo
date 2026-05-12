@@ -129,9 +129,9 @@ export default function RandomMatchScreen({
     onMatchSuccess(others, data.size, data.roomId)
   }, [currentUser, onMatchSuccess, myGender])
 
-  // 빠른 매칭 소켓
+  // 빠른 매칭 소켓 — view가 quick-match이면 항상 리스너 등록 (emit 전에 리스너가 있어야 응답을 받음)
   useEffect(() => {
-    if (view !== 'quick-match' || !quickMatchActive) return
+    if (view !== 'quick-match') return
     const socket = getSocket()
 
     const onStatus = (data: { myCount: number; theirCount: number; needed: number }) => {
@@ -149,7 +149,7 @@ export default function RandomMatchScreen({
       socket.off('solo-queue-status', onStatus)
       socket.off('match-started', onMatchStarted)
     }
-  }, [view, quickMatchActive, processMatchResult])
+  }, [view, processMatchResult])
 
   // host-wait 소켓
   useEffect(() => {
