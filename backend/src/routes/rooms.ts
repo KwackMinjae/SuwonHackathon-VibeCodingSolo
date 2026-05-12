@@ -138,9 +138,12 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
     `, roomId, room.host_id)
 
     const messages = await db.all('SELECT * FROM messages WHERE room_id = ? ORDER BY created_at ASC', roomId)
-    const appointment = await db.get('SELECT * FROM appointments WHERE room_id = ?', roomId)
+    const appointment = await db.get<{ id: number; place: string; datetime_iso: string; accepted: number; verified: number; lat?: number; lng?: number }>('SELECT * FROM appointments WHERE room_id = ?', roomId)
+    const acceptedBy = appointment ? (await db.all<{ user_id: number }>('SELECT user_id FROM appointment_accepts WHERE room_id = ?', roomId)).map(r => r.user_id) : []
+    const verifiedBy = appointment ? (await db.all<{ user_id: number }>('SELECT user_id FROM appointment_verifies WHERE room_id = ?', roomId)).map(r => r.user_id) : []
+    const apptData = appointment ? { ...appointment, acceptedBy, verifiedBy } : undefined
 
-    return res.json({ room: { ...room, teamGender: room.team_gender, hostId: room.host_id, members, memberCount: members.length, messages, appointment } })
+    return res.json({ room: { ...room, teamGender: room.team_gender, hostId: room.host_id, members, memberCount: members.length, messages, appointment: apptData } })
   } catch (e) {
     console.error('[GET /rooms/:id]', e)
     return res.status(500).json({ message: '방 정보 조회에 실패했습니다.' })
@@ -238,14 +241,18 @@ router.delete('/:id/leave', async (req: AuthRequest, res: Response) => {
 router.post('/:id/appointment', async (req: AuthRequest, res: Response) => {
   try {
     const roomId = parseInt(req.params.id)
-    const { place, datetimeISO } = req.body as { place: string; datetimeISO: string }
+    const { place, datetimeISO, lat, lng } = req.body as { place: string; datetimeISO: string; lat?: number; lng?: number }
     if (!place || !datetimeISO) return res.status(400).json({ message: '장소와 시간이 필요합니다.' })
 
     await db.run(`
-      INSERT INTO appointments (room_id, place, datetime_iso)
-      VALUES (?, ?, ?)
-      ON CONFLICT (room_id) DO UPDATE SET place = EXCLUDED.place, datetime_iso = EXCLUDED.datetime_iso, accepted = 0, verified = 0
-    `, roomId, place, datetimeISO)
+      INSERT INTO appointments (room_id, place, datetime_iso, lat, lng)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT (room_id) DO UPDATE SET place = EXCLUDED.place, datetime_iso = EXCLUDED.datetime_iso, lat = EXCLUDED.lat, lng = EXCLUDED.lng, accepted = 0, verified = 0
+    `, roomId, place, datetimeISO, lat ?? null, lng ?? null)
+
+    // 약속 변경 시 수락/인증 초기화
+    await db.run('DELETE FROM appointment_accepts WHERE room_id = ?', roomId)
+    await db.run('DELETE FROM appointment_verifies WHERE room_id = ?', roomId)
 
     await db.run(
       'INSERT INTO messages (room_id, user_id, nickname, text, type) VALUES (?, ?, ?, ?, ?)',
@@ -263,8 +270,23 @@ router.post('/:id/appointment', async (req: AuthRequest, res: Response) => {
 router.put('/:id/appointment/accept', async (req: AuthRequest, res: Response) => {
   try {
     const roomId = parseInt(req.params.id)
-    await db.run('UPDATE appointments SET accepted = 1 WHERE room_id = ?', roomId)
-    return res.json({ message: '약속이 수락되었습니다.' })
+    const userId = req.userId!
+
+    await db.run('INSERT OR IGNORE INTO appointment_accepts (room_id, user_id) VALUES (?, ?)', roomId, userId)
+
+    const accepts = await db.all<{ user_id: number }>('SELECT user_id FROM appointment_accepts WHERE room_id = ?', roomId)
+    const room = await db.get<{ capacity: number }>('SELECT capacity FROM rooms WHERE id = ?', roomId)
+    const acceptedBy = accepts.map(a => a.user_id)
+    const isFullyAccepted = !!room && acceptedBy.length >= room.capacity
+
+    if (isFullyAccepted) {
+      await db.run('UPDATE appointments SET accepted = 1 WHERE room_id = ?', roomId)
+    }
+
+    const io = getIo()
+    io.to(`room:${roomId}`).emit('appointment-accepted', { roomId, acceptedBy, isFullyAccepted })
+
+    return res.json({ message: '수락되었습니다.', acceptedBy, isFullyAccepted })
   } catch (e) {
     console.error('[PUT /rooms/:id/appointment/accept]', e)
     return res.status(500).json({ message: '약속 수락에 실패했습니다.' })
@@ -275,8 +297,17 @@ router.put('/:id/appointment/accept', async (req: AuthRequest, res: Response) =>
 router.put('/:id/appointment/verify', async (req: AuthRequest, res: Response) => {
   try {
     const roomId = parseInt(req.params.id)
-    await db.run('UPDATE appointments SET verified = 1 WHERE room_id = ?', roomId)
-    return res.json({ message: '만남이 인증되었습니다.' })
+    const userId = req.userId!
+
+    await db.run('INSERT OR IGNORE INTO appointment_verifies (room_id, user_id) VALUES (?, ?)', roomId, userId)
+
+    const verifies = await db.all<{ user_id: number }>('SELECT user_id FROM appointment_verifies WHERE room_id = ?', roomId)
+    const verifiedBy = verifies.map(v => v.user_id)
+
+    const io = getIo()
+    io.to(`room:${roomId}`).emit('appointment-verified', { roomId, verifiedBy })
+
+    return res.json({ message: '인증되었습니다.', verifiedBy })
   } catch (e) {
     console.error('[PUT /rooms/:id/appointment/verify]', e)
     return res.status(500).json({ message: '만남 인증에 실패했습니다.' })

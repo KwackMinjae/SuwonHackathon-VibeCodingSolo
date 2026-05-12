@@ -21,6 +21,8 @@ router.get('/search', async (req: Request, res: Response) => {
         name: d.place_name,
         address: d.road_address_name || d.address_name,
         category: d.category_group_name,
+        lat: parseFloat(d.y),
+        lng: parseFloat(d.x),
       }))
       return res.json({ places })
     } else {

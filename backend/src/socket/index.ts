@@ -361,15 +361,8 @@ export function setupSocket(io: IOServer) {
     })
 
     socket.on('appointment-set', (data: { roomId: number; place: string; datetimeISO: string }) => {
-      io.to(`room:${data.roomId}`).emit('appointment-updated', { ...data, accepted: false, verified: false })
-    })
-
-    socket.on('appointment-accept', (roomId: number) => {
-      io.to(`room:${roomId}`).emit('appointment-accepted', { roomId })
-    })
-
-    socket.on('appointment-verify', (roomId: number) => {
-      io.to(`room:${roomId}`).emit('appointment-verified', { roomId })
+      // 발신자 제외하고 나머지에게만 전송 (발신자는 낙관적 업데이트)
+      socket.broadcast.to(`room:${data.roomId}`).emit('appointment-updated', { ...data, acceptedBy: [], verifiedBy: [], accepted: false, verified: false })
     })
 
     socket.on('disconnect', () => {

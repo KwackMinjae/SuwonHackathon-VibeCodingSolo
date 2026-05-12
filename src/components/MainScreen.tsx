@@ -12,6 +12,7 @@ interface ServerMessage {
 }
 interface ServerAppointment {
   id: number; room_id: number; place: string; datetime_iso: string; accepted: number; verified: number
+  lat?: number; lng?: number; acceptedBy?: number[]; verifiedBy?: number[]
 }
 interface ServerRoom {
   id: number; title: string; capacity: number; teamGender: string; status: string; hostId: number
@@ -24,7 +25,11 @@ function serverRoomToChatRoom(r: ServerRoom, currentUserId: number): ChatRoom {
     place: r.appointment.place,
     datetimeISO: r.appointment.datetime_iso,
     accepted: r.appointment.accepted === 1,
+    acceptedBy: r.appointment.acceptedBy ?? [],
     verified: r.appointment.verified === 1,
+    verifiedBy: r.appointment.verifiedBy ?? [],
+    lat: r.appointment.lat,
+    lng: r.appointment.lng,
   } : undefined
   return {
     id: r.id,

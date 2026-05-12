@@ -161,7 +161,35 @@ export async function initDB() {
       FOREIGN KEY (room_id) REFERENCES rooms(id),
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
+
+    CREATE TABLE IF NOT EXISTS appointment_accepts (
+      id SERIAL PRIMARY KEY,
+      room_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE (room_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS appointment_verifies (
+      id SERIAL PRIMARY KEY,
+      room_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE (room_id, user_id)
+    );
   `)
+
+  // 마이그레이션 (기존 테이블에 컬럼 추가)
+  const migrations = [
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS student_id TEXT NOT NULL DEFAULT ''`,
+    `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS allow_duplicate INTEGER NOT NULL DEFAULT 1`,
+    `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION`,
+    `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION`,
+  ]
+  for (const sql of migrations) {
+    try { await pool.query(sql) } catch { /* 이미 존재 */ }
+  }
+
   console.log('[DB] PostgreSQL 스키마 초기화 완료')
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { getSocket } from '../api/socket'
 import { api } from '../api/client'
 
@@ -16,7 +16,11 @@ export interface Appointment {
   place: string
   datetimeISO: string
   accepted: boolean
+  acceptedBy: number[]
   verified: boolean
+  verifiedBy: number[]
+  lat?: number
+  lng?: number
 }
 
 export interface MemberDetail {
@@ -66,19 +70,26 @@ function timeUntilText(iso: string) {
   return h > 0 ? `${h}시간 ${m}분` : `${m}분`
 }
 
-function canRate(appt?: Appointment) {
-  if (!appt || !appt.accepted) return false
-  return Date.now() - new Date(appt.datetimeISO).getTime() >= 4 * 60 * 60 * 1000
+function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
+
+// ── 약속 설정 모달 ─────────────────────────────────────────────
 
 function AppointmentModal({ onClose, onSend }: {
   onClose: () => void
-  onSend: (place: string, dt: Date) => void
+  onSend: (place: string, dt: Date, lat?: number, lng?: number) => void
 }) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<{ name: string; address: string; category?: string }[]>([])
+  const [results, setResults] = useState<{ name: string; address: string; category?: string; lat?: number; lng?: number }[]>([])
   const [searching, setSearching] = useState(false)
   const [place, setPlace] = useState('')
+  const [selectedLat, setSelectedLat] = useState<number | undefined>()
+  const [selectedLng, setSelectedLng] = useState<number | undefined>()
   const [dateStr, setDateStr] = useState('')
   const [timeStr, setTimeStr] = useState('')
   const canSend = place.trim() && dateStr && timeStr
@@ -89,7 +100,7 @@ function AppointmentModal({ onClose, onSend }: {
     if (!searchQ) return
     setSearching(true)
     try {
-      const data = await api.get<{ places: { name: string; address: string; category?: string }[] }>(
+      const data = await api.get<{ places: { name: string; address: string; category?: string; lat?: number; lng?: number }[] }>(
         `/places/search?q=${encodeURIComponent(searchQ)}`
       )
       setResults(data.places)
@@ -136,7 +147,7 @@ function AppointmentModal({ onClose, onSend }: {
             <div style={{ border: '1px solid #eee', borderRadius: 8, marginTop: 6, maxHeight: 180, overflowY: 'auto' }}>
               {results.map((r, i) => (
                 <button key={i}
-                  onClick={() => { setPlace(r.name); setQuery(r.name); setResults([]) }}
+                  onClick={() => { setPlace(r.name); setQuery(r.name); setSelectedLat(r.lat); setSelectedLng(r.lng); setResults([]) }}
                   style={{ width: '100%', textAlign: 'left', padding: '10px 12px', background: 'none', border: 'none', borderBottom: i < results.length - 1 ? '1px solid #f0f0f0' : 'none', cursor: 'pointer' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{r.name}</div>
@@ -166,7 +177,7 @@ function AppointmentModal({ onClose, onSend }: {
           <input type="time" className="pw-input" value={timeStr} onChange={e => setTimeStr(e.target.value)} />
         </div>
         <button className="btn-login" disabled={!canSend}
-          onClick={() => canSend && onSend(place.trim(), new Date(`${dateStr}T${timeStr}`))}>
+          onClick={() => canSend && onSend(place.trim(), new Date(`${dateStr}T${timeStr}`), selectedLat, selectedLng)}>
           보내기
         </button>
       </div>
@@ -174,15 +185,34 @@ function AppointmentModal({ onClose, onSend }: {
   )
 }
 
+// ── 만남 인증 모달 ─────────────────────────────────────────────
+
 function VerifyModal({ appointment, onVerify, onClose }: {
   appointment: Appointment; onVerify: () => void; onClose: () => void
 }) {
-  const [step, setStep] = useState<'checking' | 'ready' | 'early' | 'done'>('checking')
+  const [step, setStep] = useState<'checking' | 'ready' | 'early' | 'far' | 'done'>('checking')
+  const [distanceM, setDistanceM] = useState<number | null>(null)
 
   useEffect(() => {
     if (!isWithinWindow(appointment.datetimeISO)) { setStep('early'); return }
+
     if (!navigator.geolocation) { setStep('ready'); return }
-    navigator.geolocation.getCurrentPosition(() => setStep('ready'), () => setStep('ready'), { timeout: 5000 })
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude: userLat, longitude: userLng } = pos.coords
+        if (appointment.lat && appointment.lng) {
+          const distKm = distanceKm(userLat, userLng, appointment.lat, appointment.lng)
+          const dm = Math.round(distKm * 1000)
+          setDistanceM(dm)
+          setStep(distKm <= 0.5 ? 'ready' : 'far')
+        } else {
+          setStep('ready')
+        }
+      },
+      () => setStep('ready'),
+      { timeout: 5000 }
+    )
   }, [])
 
   const remaining = timeUntilText(appointment.datetimeISO)
@@ -191,7 +221,7 @@ function VerifyModal({ appointment, onVerify, onClose }: {
     <div className="modal-overlay">
       <div className="modal-box">
         <div className="modal-header">
-          <h3 className="modal-title">만난 인증</h3>
+          <h3 className="modal-title">만남 인증</h3>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
         <div className="verify-info-box">
@@ -211,9 +241,22 @@ function VerifyModal({ appointment, onVerify, onClose }: {
               : '약속 시간이 지났어요. (약속 시간 ±30분 이내에 인증 가능해요)'}
           </div>
         )}
+        {step === 'far' && (
+          <>
+            <div className="verify-status error">
+              📍 약속 장소에서 너무 멀어요! ({distanceM}m)<br />
+              500m 이내에서 인증할 수 있어요.
+            </div>
+            <button className="btn-login" style={{ background: '#aaa', marginTop: 8 }} onClick={() => window.open(`https://map.kakao.com/?q=${encodeURIComponent(appointment.place)}`, '_blank')}>
+              지도로 보기
+            </button>
+          </>
+        )}
         {step === 'ready' && (
           <>
-            <div className="verify-status ok">📍 위치 확인 완료! 인증할 수 있어요.</div>
+            <div className="verify-status ok">
+              {distanceM !== null ? `📍 약속 장소 ${distanceM}m 근처에 있어요!` : '📍 위치 확인 완료! 인증할 수 있어요.'}
+            </div>
             <button className="btn-login" onClick={() => { onVerify(); setStep('done') }}>인증하기</button>
           </>
         )}
@@ -222,6 +265,8 @@ function VerifyModal({ appointment, onVerify, onClose }: {
     </div>
   )
 }
+
+// ── 좋아요 선택 모달 ────────────────────────────────────────────
 
 function PickFavoriteModal({ roomId, memberDetails, currentUserId, currentNickname, currentGender, myLike, onClose, onPicked }: {
   roomId: number
@@ -237,7 +282,6 @@ function PickFavoriteModal({ roomId, memberDetails, currentUserId, currentNickna
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(!!myLike)
 
-  // 이성만 선택 가능
   const candidates = (memberDetails ?? []).filter(m =>
     m.id !== currentUserId && (!currentGender || m.gender !== currentGender)
   )
@@ -347,7 +391,17 @@ function LeaveModal({ onClose, onLeave }: { onClose: () => void; onLeave: () => 
   )
 }
 
-function AppointmentCard({ appt, onAccept }: { appt: Appointment; onAccept: () => void }) {
+// ── 약속 카드 ───────────────────────────────────────────────────
+
+function AppointmentCard({ appt, currentUserId, totalCapacity, onAccept }: {
+  appt: Appointment
+  currentUserId?: number
+  totalCapacity: number
+  onAccept: () => void
+}) {
+  const myAccepted = currentUserId ? appt.acceptedBy.includes(currentUserId) : false
+  const acceptCount = appt.acceptedBy.length
+
   return (
     <div className="appt-card">
       <div className="appt-card-title">📅 약속 설정</div>
@@ -363,12 +417,24 @@ function AppointmentCard({ appt, onAccept }: { appt: Appointment; onAccept: () =
         <span className="appt-card-icon">🕐</span>
         <span className="appt-card-text">{formatDatetime(appt.datetimeISO)}</span>
       </div>
-      {!appt.accepted
-        ? <button className="btn-accept" onClick={onAccept}>수락하기</button>
-        : <div className="appt-accepted">✅ 약속이 확정되었어요!</div>}
+      {!appt.accepted ? (
+        <div>
+          <div style={{ fontSize: '0.8rem', color: '#888', margin: '8px 0', textAlign: 'center' }}>
+            수락 {acceptCount}/{totalCapacity}명
+          </div>
+          {myAccepted
+            ? <div className="appt-accepted">✅ 수락 완료 ({acceptCount}/{totalCapacity}명 수락)</div>
+            : <button className="btn-accept" onClick={onAccept}>수락하기</button>
+          }
+        </div>
+      ) : (
+        <div className="appt-accepted">✅ 약속이 확정되었어요!</div>
+      )}
     </div>
   )
 }
+
+// ── 채팅방 목록 ─────────────────────────────────────────────────
 
 export function ChatList({ rooms, onOpenRoom }: { rooms: ChatRoom[]; onOpenRoom: (room: ChatRoom) => void }) {
   return (
@@ -398,6 +464,8 @@ export function ChatList({ rooms, onOpenRoom }: { rooms: ChatRoom[]; onOpenRoom:
   )
 }
 
+// ── 채팅방 뷰 ──────────────────────────────────────────────────
+
 interface RoomProps {
   room: ChatRoom
   currentUserId?: number
@@ -419,9 +487,19 @@ export function ChatRoomView({ room, currentUserId, currentNickname, currentGend
   const [showLeave, setShowLeave]       = useState(false)
   const [showMembers, setShowMembers]   = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
-  // stale closure 방지용 ref
   const roomRef = useRef(room)
   useEffect(() => { roomRef.current = room })
+
+  // 상대방 이름으로 타이틀 표시
+  const displayTitle = useMemo(() => {
+    if (!currentGender || !room.memberDetails || room.memberDetails.length === 0) return room.title
+    const opponents = room.memberDetails.filter(m => m.gender !== currentGender && m.id !== currentUserId)
+    if (opponents.length === 0) return room.title
+    return opponents.map(m => m.nickname).join(', ')
+  }, [room.memberDetails, currentGender, currentUserId, room.title])
+
+  const appt = room.appointment
+  const myVerified = currentUserId ? (appt?.verifiedBy ?? []).includes(currentUserId) : false
 
   useEffect(() => {
     const socket = getSocket()
@@ -429,39 +507,36 @@ export function ChatRoomView({ room, currentUserId, currentNickname, currentGend
 
     socket.on('new-message', (msg: { id: number; text: string; senderName: string; userId: number; time: string; type: string }) => {
       const newMsg: ChatMessage = {
-        id: msg.id,
-        text: msg.text,
+        id: msg.id, text: msg.text,
         isMine: msg.userId === currentUserId,
-        senderName: msg.senderName,
-        time: msg.time,
-        userId: msg.userId,
-        isAppointment: msg.type === 'appointment',
+        senderName: msg.senderName, time: msg.time,
+        userId: msg.userId, isAppointment: msg.type === 'appointment',
       }
       const cur = roomRef.current
       onUpdateRoom({ ...cur, messages: [...cur.messages, newMsg] })
     })
 
-    socket.on('appointment-updated', (data: { place: string; datetimeISO: string; accepted: boolean; verified: boolean }) => {
+    socket.on('appointment-updated', (data: { place: string; datetimeISO: string; acceptedBy: number[]; verifiedBy: number[]; accepted: boolean; verified: boolean }) => {
       const apptMsg: ChatMessage = { id: Date.now(), text: '', isMine: false, time: nowTime(), isAppointment: true }
       const cur = roomRef.current
       onUpdateRoom({
         ...cur,
         messages: [...cur.messages, apptMsg],
-        appointment: { place: data.place, datetimeISO: data.datetimeISO, accepted: false, verified: false },
+        appointment: { place: data.place, datetimeISO: data.datetimeISO, accepted: false, acceptedBy: [], verified: false, verifiedBy: [] },
       })
     })
 
-    socket.on('appointment-accepted', () => {
+    socket.on('appointment-accepted', (data: { roomId: number; acceptedBy: number[]; isFullyAccepted: boolean }) => {
       const cur = roomRef.current
       if (cur.appointment) {
-        onUpdateRoom({ ...cur, appointment: { ...cur.appointment, accepted: true } })
+        onUpdateRoom({ ...cur, appointment: { ...cur.appointment, accepted: data.isFullyAccepted, acceptedBy: data.acceptedBy } })
       }
     })
 
-    socket.on('appointment-verified', () => {
+    socket.on('appointment-verified', (data: { roomId: number; verifiedBy: number[] }) => {
       const cur = roomRef.current
       if (cur.appointment) {
-        onUpdateRoom({ ...cur, appointment: { ...cur.appointment, verified: true } })
+        onUpdateRoom({ ...cur, appointment: { ...cur.appointment, verifiedBy: data.verifiedBy, verified: data.verifiedBy.length > 0 } })
       }
     })
 
@@ -483,19 +558,18 @@ export function ChatRoomView({ room, currentUserId, currentNickname, currentGend
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [room.messages.length])
 
-  const appt = room.appointment
-
-  const handleSetAppointment = async (place: string, dt: Date) => {
+  const handleSetAppointment = async (place: string, dt: Date, lat?: number, lng?: number) => {
     const datetimeISO = dt.toISOString()
     try {
-      await api.post(`/rooms/${room.id}/appointment`, { place, datetimeISO }, true)
+      await api.post(`/rooms/${room.id}/appointment`, { place, datetimeISO, lat, lng }, true)
       const socket = getSocket()
       socket.emit('appointment-set', { roomId: room.id, place, datetimeISO })
+      // 발신자 낙관적 업데이트 (다른 사람들은 소켓 이벤트로 수신)
       const apptMsg: ChatMessage = { id: Date.now(), text: '', isMine: true, time: nowTime(), isAppointment: true }
       onUpdateRoom({
         ...room,
         messages: [...room.messages, apptMsg],
-        appointment: { place, datetimeISO, accepted: false, verified: false },
+        appointment: { place, datetimeISO, accepted: false, acceptedBy: [], verified: false, verifiedBy: [], lat, lng },
       })
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : '약속 설정에 실패했습니다.')
@@ -505,10 +579,10 @@ export function ChatRoomView({ room, currentUserId, currentNickname, currentGend
 
   const handleAcceptAppointment = async () => {
     try {
-      await api.put(`/rooms/${room.id}/appointment/accept`, {}, true)
-      const socket = getSocket()
-      socket.emit('appointment-accept', room.id)
-      if (appt) onUpdateRoom({ ...room, appointment: { ...appt, accepted: true } })
+      const result = await api.put<{ acceptedBy: number[]; isFullyAccepted: boolean }>(
+        `/rooms/${room.id}/appointment/accept`, {}, true
+      )
+      if (appt) onUpdateRoom({ ...room, appointment: { ...appt, accepted: result.isFullyAccepted, acceptedBy: result.acceptedBy } })
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : '수락에 실패했습니다.')
     }
@@ -516,10 +590,10 @@ export function ChatRoomView({ room, currentUserId, currentNickname, currentGend
 
   const handleVerify = async () => {
     try {
-      await api.put(`/rooms/${room.id}/appointment/verify`, {}, true)
-      const socket = getSocket()
-      socket.emit('appointment-verify', room.id)
-      if (appt) onUpdateRoom({ ...room, appointment: { ...appt, verified: true } })
+      const result = await api.put<{ verifiedBy: number[] }>(
+        `/rooms/${room.id}/appointment/verify`, {}, true
+      )
+      if (appt) onUpdateRoom({ ...room, appointment: { ...appt, verifiedBy: result.verifiedBy, verified: true } })
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : '인증에 실패했습니다.')
     }
@@ -533,7 +607,6 @@ export function ChatRoomView({ room, currentUserId, currentNickname, currentGend
     if (!input.trim()) return
     const socket = getSocket()
     socket.emit('send-message', { roomId: room.id, text: input.trim() })
-    // 낙관적 업데이트
     const msg: ChatMessage = {
       id: Date.now(), text: input.trim(), isMine: true,
       senderName: currentNickname, time: nowTime(), userId: currentUserId,
@@ -545,8 +618,8 @@ export function ChatRoomView({ room, currentUserId, currentNickname, currentGend
   let rightBtn: React.ReactNode
   if (!appt || !appt.accepted) {
     rightBtn = <button className="btn-appt-header" onClick={() => setShowAppModal(true)}>📍 약속장소 지정</button>
-  } else if (!appt.verified) {
-    rightBtn = <button className="btn-verify-header" onClick={() => setShowVerify(true)}>✅ 만난인증</button>
+  } else if (!myVerified) {
+    rightBtn = <button className="btn-verify-header" onClick={() => setShowVerify(true)}>✅ 만남 인증</button>
   } else {
     rightBtn = (
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -620,7 +693,7 @@ export function ChatRoomView({ room, currentUserId, currentNickname, currentGend
       <div className="chat-room-header">
         <button className="btn-back" onClick={onBack}>← 뒤로</button>
         <h2 className="chat-room-title" style={{ cursor: 'pointer' }} onClick={() => setShowMembers(true)}>
-          {room.title} <span style={{ fontSize: '0.7rem', color: '#aaa' }}>👥</span>
+          {displayTitle} <span style={{ fontSize: '0.7rem', color: '#aaa' }}>👥</span>
         </h2>
         {rightBtn}
       </div>
@@ -629,7 +702,7 @@ export function ChatRoomView({ room, currentUserId, currentNickname, currentGend
         {room.messages.map(msg =>
           msg.isAppointment && appt ? (
             <div key={msg.id} className="appt-card-wrapper">
-              <AppointmentCard appt={appt} onAccept={handleAcceptAppointment} />
+              <AppointmentCard appt={appt} currentUserId={currentUserId} totalCapacity={room.capacity} onAccept={handleAcceptAppointment} />
             </div>
           ) : (
             <div key={msg.id} className={`chat-bubble-wrap ${msg.isMine ? 'mine' : 'theirs'}`}>

@@ -98,9 +98,12 @@ router.get('/me/rooms', async (req: AuthRequest, res: Response) => {
       `, room.id, room.hostId)
 
       const messages = await db.all('SELECT * FROM messages WHERE room_id = ? ORDER BY created_at ASC', room.id)
-      const appointment = await db.get('SELECT * FROM appointments WHERE room_id = ?', room.id)
+      const appointment = await db.get<{ id: number; place: string; datetime_iso: string; accepted: number; verified: number; lat?: number; lng?: number }>('SELECT * FROM appointments WHERE room_id = ?', room.id)
+      const acceptedBy = appointment ? (await db.all<{ user_id: number }>('SELECT user_id FROM appointment_accepts WHERE room_id = ?', room.id)).map(r => r.user_id) : []
+      const verifiedBy = appointment ? (await db.all<{ user_id: number }>('SELECT user_id FROM appointment_verifies WHERE room_id = ?', room.id)).map(r => r.user_id) : []
+      const apptData = appointment ? { ...appointment, acceptedBy, verifiedBy } : undefined
 
-      return { ...room, members, memberCount: members.length, messages, appointment }
+      return { ...room, members, memberCount: members.length, messages, appointment: apptData }
     }))
 
     return res.json({ rooms: result })
