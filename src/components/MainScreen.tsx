@@ -1,9 +1,62 @@
 import { useState, useEffect, useCallback } from 'react'
 import SettingsTab from './SettingsTab'
-import { ChatList, ChatRoomView, ChatRoom, ChatMessage } from './ChatScreen'
+import { ChatList, ChatRoomView, ChatRoom, ChatMessage, Appointment } from './ChatScreen'
 import RandomMatchScreen, { UserProfile, MockUser, TeamState, SoloQueueState, MatchStartedPayload } from './RandomMatchScreen'
 import { api } from '../api/client'
 import { getSocket } from '../api/socket'
+
+// 서버 방 데이터 타입
+interface ServerMessage {
+  id: number; room_id: number; user_id: number | null; nickname: string | null
+  text: string; type: string; created_at: string
+}
+interface ServerAppointment {
+  id: number; room_id: number; place: string; datetime_iso: string; accepted: number; verified: number
+}
+interface ServerRoom {
+  id: number; title: string; capacity: number; teamGender: string; status: string; hostId: number
+  members: { id: number; nickname: string; gender: string; dept: string; email: string; student_id: string }[]
+  memberCount: number; messages: ServerMessage[]; appointment?: ServerAppointment
+}
+
+function serverRoomToChatRoom(r: ServerRoom, currentUserId: number): ChatRoom {
+  const appointment: Appointment | undefined = r.appointment ? {
+    place: r.appointment.place,
+    datetimeISO: r.appointment.datetime_iso,
+    accepted: r.appointment.accepted === 1,
+    verified: r.appointment.verified === 1,
+  } : undefined
+  return {
+    id: r.id,
+    title: r.title,
+    messages: r.messages.map(m => ({
+      id: m.id,
+      text: m.text,
+      isMine: m.user_id === currentUserId,
+      senderName: m.nickname ?? undefined,
+      time: new Date(m.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+      userId: m.user_id ?? undefined,
+      isAppointment: m.type === 'appointment',
+    })),
+    capacity: r.capacity,
+    memberCount: r.memberCount,
+    members: r.members.map(m => m.nickname),
+    memberDetails: r.members,
+    ratings: {},
+    appointment,
+  }
+}
+
+function showMatchNotification() {
+  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    try {
+      new Notification('💘 매칭 완료!', {
+        body: '상대팀과 매칭되었어요! 채팅방을 확인해보세요.',
+        icon: '/favicon.ico',
+      })
+    } catch { /* 알림 권한 없음 */ }
+  }
+}
 
 type Tab = '과팅' | '채팅방' | '설정'
 type SubScreen = null | 'random-create' | 'random-join' | 'quick-match' | 'chatroom'
@@ -42,6 +95,7 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
   const [showTeamCancelConfirm, setShowTeamCancelConfirm] = useState(false)
 
   const handleMatchSuccess = (matchedUsers: MockUser[], size: number, roomId?: number) => {
+    showMatchNotification()
     const t = nowTime()
     const members = [currentUser.nickname, ...matchedUsers.map(u => u.nickname)]
     const memberIds: Record<string, number> = {}
@@ -76,6 +130,46 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
     setSub('chatroom')
     setTab('채팅방')
   }
+
+  // 앱 초기화: 알림 권한 요청, 상태 복원, 채팅방 로드
+  useEffect(() => {
+    // 브라우저 알림 권한 요청
+    if ('Notification' in window) Notification.requestPermission()
+
+    // 매칭 상태 localStorage 복원
+    try {
+      const t = localStorage.getItem('sws_teamState')
+      if (t) setTeamState(JSON.parse(t))
+      const s = localStorage.getItem('sws_soloState')
+      if (s) setSoloQueueState(JSON.parse(s))
+    } catch { /* ignore */ }
+
+    // 백엔드에서 내 채팅방 목록 로드
+    api.get<{ rooms: ServerRoom[] }>('/users/me/rooms', true)
+      .then(data => {
+        const loaded = data.rooms.map(r => serverRoomToChatRoom(r, currentUser.id!))
+        setChatRooms(prev => {
+          const merged = [...loaded]
+          for (const r of prev) {
+            if (!merged.some(m => m.id === r.id)) merged.push(r)
+          }
+          return merged
+        })
+      })
+      .catch(() => {})
+  }, [])
+
+  // teamState 변경 시 localStorage 동기화
+  useEffect(() => {
+    if (teamState) localStorage.setItem('sws_teamState', JSON.stringify(teamState))
+    else localStorage.removeItem('sws_teamState')
+  }, [teamState])
+
+  // soloQueueState 변경 시 localStorage 동기화
+  useEffect(() => {
+    if (soloQueueState) localStorage.setItem('sws_soloState', JSON.stringify(soloQueueState))
+    else localStorage.removeItem('sws_soloState')
+  }, [soloQueueState])
 
   // 백그라운드에서 매칭 이벤트 수신 (RandomMatchScreen이 unmount된 상태일 때)
   useEffect(() => {
@@ -123,6 +217,9 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
     if (sub === 'quick-match') return
 
     const socket = getSocket()
+    // 앱 재시작 후 복원 시 큐 재등록
+    socket.emit('solo-queue-join', { matchSize: soloQueueState.matchSize, allowDuplicate: soloQueueState.allowDuplicate })
+
     const onMatchStarted = (data: MatchStartedPayload) => {
       const myGender = currentUser.gender
       const matchedUsers = data.members
@@ -270,6 +367,7 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
       room={activeRoom}
       currentUserId={currentUser.id}
       currentNickname={currentUser.nickname}
+      currentGender={currentUser.gender}
       onBack={() => { setSub(null); setTab('채팅방') }}
       onSend={handleSend}
       onUpdateRoom={handleUpdateRoom}

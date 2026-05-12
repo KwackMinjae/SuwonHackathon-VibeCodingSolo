@@ -78,4 +78,39 @@ router.delete('/me', async (req: AuthRequest, res: Response) => {
   return res.json({ message: '계정이 삭제되었습니다.' })
 })
 
+// 내가 참여한 활성 채팅방 목록 조회
+router.get('/me/rooms', (req: AuthRequest, res: Response) => {
+  try {
+    const rooms = db.prepare(`
+      SELECT r.id, r.title, r.capacity, r.team_gender AS teamGender, r.status, r.host_id AS hostId
+      FROM rooms r
+      JOIN room_members rm ON rm.room_id = r.id
+      WHERE rm.user_id = ? AND r.status IN ('active', 'waiting', 'seeking')
+      ORDER BY r.created_at DESC
+    `).all(req.userId) as { id: number; title: string; capacity: number; teamGender: string; status: string; hostId: number }[]
+
+    const result = rooms.map(room => {
+      const members = db.prepare(`
+        SELECT u.id, u.nickname, u.gender, u.dept, u.email, u.student_id
+        FROM room_members rm JOIN users u ON u.id = rm.user_id
+        WHERE rm.room_id = ?
+        ORDER BY CASE WHEN u.id = ? THEN 0 ELSE 1 END, rm.id ASC
+      `).all(room.id, room.hostId) as { id: number; nickname: string; gender: string; dept: string; email: string; student_id: string }[]
+
+      const messages = db.prepare(
+        'SELECT * FROM messages WHERE room_id = ? ORDER BY created_at ASC'
+      ).all(room.id)
+
+      const appointment = db.prepare('SELECT * FROM appointments WHERE room_id = ?').get(room.id)
+
+      return { ...room, members, memberCount: members.length, messages, appointment }
+    })
+
+    return res.json({ rooms: result })
+  } catch (e) {
+    console.error('[GET /users/me/rooms]', e)
+    return res.status(500).json({ message: '채팅방 조회에 실패했습니다.' })
+  }
+})
+
 export default router

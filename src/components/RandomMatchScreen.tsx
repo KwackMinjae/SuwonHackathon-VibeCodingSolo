@@ -99,6 +99,7 @@ export default function RandomMatchScreen({
   const [loading, setLoading]   = useState(false)
   const [kickingIdx, setKickingIdx] = useState<number | null>(null)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  const [joinWaitSeeking, setJoinWaitSeeking] = useState(false)
 
   // 빠른 매칭 상태 (soloStateResume이 있으면 복원)
   const [quickMatchSize, setQuickMatchSize] = useState(soloStateResume?.matchSize ?? 2)
@@ -134,6 +135,10 @@ export default function RandomMatchScreen({
   })
 
   const processMatchResult = useCallback((data: MatchStartedPayload) => {
+    // 브라우저 알림
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      try { new Notification('💘 매칭 완료!', { body: '상대팀과 매칭되었어요! 채팅방을 확인해보세요.', icon: '/favicon.ico' }) } catch { /* ignore */ }
+    }
     const myTeam    = data.members.filter(m => m.gender === myGender).map(toMockUser)
     const otherTeam = data.members.filter(m => m.gender !== myGender).map(toMockUser)
     setResult({ myTeam, otherTeam, size: data.size })
@@ -252,13 +257,16 @@ export default function RandomMatchScreen({
     }
     const onMatchStarted = (data: MatchStartedPayload) => processMatchResult(data)
     const onMatchSeeking = () => {
-      goToMainRef.current({
-        roomId: roomIdRef.current,
-        roomCode: joinCodeRef.current || roomCodeRef.current,
-        matchSize: matchSizeRef.current,
-        isHost: false,
-        isSeeking: true,
-      })
+      setJoinWaitSeeking(true)
+      setTimeout(() => {
+        goToMainRef.current({
+          roomId: roomIdRef.current,
+          roomCode: joinCodeRef.current || roomCodeRef.current,
+          matchSize: matchSizeRef.current,
+          isHost: false,
+          isSeeking: true,
+        })
+      }, 2000)
     }
     const onKicked = () => { alert('방에서 추방되었습니다.'); setView('join-input') }
     const onRoomClosed = () => { alert('방장이 방을 나갔습니다.'); setView('join-input') }
@@ -567,6 +575,17 @@ export default function RandomMatchScreen({
       <button className="btn-login" onClick={joinRoom} disabled={joinCode.length !== 6 || loading}>
         {loading ? '입장 중...' : '입장하기'}
       </button>
+    </div>
+  )
+
+  if (view === 'join-wait' && joinWaitSeeking) return (
+    <div className="match-wrap">
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, flex: 1, paddingTop: 60 }}>
+        <div style={{ fontSize: '3.5rem', animation: 'heartSpin 1s linear infinite' }}>💘</div>
+        <h2 className="match-title" style={{ textAlign: 'center' }}>매칭 중...</h2>
+        <p className="step-desc" style={{ textAlign: 'center' }}>방장이 매칭을 시작했어요!<br />{otherGender}자팀을 찾고 있어요.</p>
+        <p style={{ fontSize: '0.8rem', color: '#aaa', textAlign: 'center' }}>잠시 후 메인화면으로 이동합니다</p>
+      </div>
     </div>
   )
 

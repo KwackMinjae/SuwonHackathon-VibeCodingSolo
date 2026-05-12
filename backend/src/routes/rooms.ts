@@ -78,6 +78,10 @@ router.post('/join', (req: AuthRequest, res: Response) => {
     const memberCount = (db.prepare('SELECT COUNT(*) AS cnt FROM room_members WHERE room_id = ?').get(room.id) as { cnt: number }).cnt
     if (memberCount >= room.capacity) return res.status(400).json({ message: '방이 가득 찼습니다.' })
 
+    // 추방된 유저인지 확인
+    const wasKicked = db.prepare('SELECT id FROM room_kicks WHERE room_id = ? AND user_id = ?').get(room.id, req.userId)
+    if (wasKicked) return res.status(403).json({ message: '이 방에서 추방되어 다시 입장할 수 없습니다.' })
+
     const alreadyIn = db.prepare('SELECT id FROM room_members WHERE room_id = ? AND user_id = ?').get(room.id, req.userId)
     if (!alreadyIn) {
       db.prepare('INSERT INTO room_members (room_id, user_id) VALUES (?, ?)').run(room.id, req.userId)
@@ -156,6 +160,7 @@ router.delete('/:id/members/:userId', (req: AuthRequest, res: Response) => {
     if (!target) return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' })
 
     db.prepare('DELETE FROM room_members WHERE room_id = ? AND user_id = ?').run(roomId, targetUserId)
+    db.prepare('INSERT OR IGNORE INTO room_kicks (room_id, user_id) VALUES (?, ?)').run(roomId, targetUserId)
     db.prepare('INSERT INTO messages (room_id, user_id, nickname, text, type) VALUES (?, ?, ?, ?, ?)')
       .run(roomId, null, '시스템', `🚫 ${target.nickname}님이 추방되었습니다.`, 'system')
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { getSocket } from '../api/socket'
 import { api } from '../api/client'
 
@@ -76,25 +76,38 @@ function AppointmentModal({ onClose, onSend }: {
   onSend: (place: string, dt: Date) => void
 }) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<{ name: string; address: string }[]>([])
+  const [results, setResults] = useState<{ name: string; address: string; category?: string }[]>([])
   const [searching, setSearching] = useState(false)
   const [place, setPlace] = useState('')
   const [dateStr, setDateStr] = useState('')
   const [timeStr, setTimeStr] = useState('')
   const canSend = place.trim() && dateStr && timeStr
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const searchPlace = async () => {
-    if (!query.trim()) return
+  const searchPlace = useCallback(async (q?: string) => {
+    const searchQ = (q ?? query).trim()
+    if (!searchQ) return
     setSearching(true)
     try {
-      const data = await api.get<{ places: { name: string; address: string }[] }>(
-        `/places/search?q=${encodeURIComponent(query.trim())}`
+      const data = await api.get<{ places: { name: string; address: string; category?: string }[] }>(
+        `/places/search?q=${encodeURIComponent(searchQ)}`
       )
       setResults(data.places)
     } catch {
       setResults([])
     } finally {
       setSearching(false)
+    }
+  }, [query])
+
+  const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    setQuery(val)
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+    if (val.trim().length >= 2) {
+      searchTimer.current = setTimeout(() => searchPlace(val), 500)
+    } else {
+      setResults([])
     }
   }
 
@@ -110,12 +123,12 @@ function AppointmentModal({ onClose, onSend }: {
           <div className="place-row">
             <input
               className="pw-input"
-              placeholder="메가커피, 스타벅스 홍대..."
+              placeholder="카페, 식당, 장소명 입력..."
               value={query}
-              onChange={e => setQuery(e.target.value)}
+              onChange={handleQueryChange}
               onKeyDown={e => e.key === 'Enter' && searchPlace()}
             />
-            <button className="btn-map-icon" onClick={searchPlace} disabled={searching}>
+            <button className="btn-map-icon" onClick={() => searchPlace()} disabled={searching}>
               {searching ? '⏳' : '🔍'}
             </button>
           </div>
@@ -125,7 +138,10 @@ function AppointmentModal({ onClose, onSend }: {
                 <button key={i}
                   onClick={() => { setPlace(r.name); setQuery(r.name); setResults([]) }}
                   style={{ width: '100%', textAlign: 'left', padding: '10px 12px', background: 'none', border: 'none', borderBottom: i < results.length - 1 ? '1px solid #f0f0f0' : 'none', cursor: 'pointer' }}>
-                  <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{r.name}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{r.name}</div>
+                    {r.category && <span style={{ fontSize: '0.7rem', color: '#aaa', background: '#f5f5f5', borderRadius: 4, padding: '1px 5px' }}>{r.category}</span>}
+                  </div>
                   <div style={{ color: '#888', fontSize: '0.78rem', marginTop: 2 }}>{r.address}</div>
                 </button>
               ))}
@@ -207,11 +223,12 @@ function VerifyModal({ appointment, onVerify, onClose }: {
   )
 }
 
-function PickFavoriteModal({ roomId, memberDetails, currentUserId, currentNickname, myLike, onClose, onPicked }: {
+function PickFavoriteModal({ roomId, memberDetails, currentUserId, currentNickname, currentGender, myLike, onClose, onPicked }: {
   roomId: number
   memberDetails?: MemberDetail[]
   currentUserId?: number
   currentNickname?: string
+  currentGender?: string
   myLike?: string
   onClose: () => void
   onPicked: (nickname: string) => void
@@ -220,7 +237,10 @@ function PickFavoriteModal({ roomId, memberDetails, currentUserId, currentNickna
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(!!myLike)
 
-  const candidates = (memberDetails ?? []).filter(m => m.id !== currentUserId)
+  // 이성만 선택 가능
+  const candidates = (memberDetails ?? []).filter(m =>
+    m.id !== currentUserId && (!currentGender || m.gender !== currentGender)
+  )
 
   const handleConfirm = async () => {
     const detail = candidates.find(d => d.nickname === selected)
@@ -289,8 +309,8 @@ function PickFavoriteModal({ roomId, memberDetails, currentUserId, currentNickna
   )
 }
 
-function PlusMenu({ onAppt, onRate, onLeave, onClose }: {
-  onAppt: () => void; onRate: () => void; onLeave: () => void; onClose: () => void
+function PlusMenu({ onAppt, onLeave, onClose }: {
+  onAppt: () => void; onLeave: () => void; onClose: () => void
 }) {
   return (
     <>
@@ -298,9 +318,6 @@ function PlusMenu({ onAppt, onRate, onLeave, onClose }: {
       <div className="plus-menu">
         <button className="plus-menu-item" onClick={() => { onAppt(); onClose() }}>
           <span>📍</span><span>약속장소 지정</span>
-        </button>
-        <button className="plus-menu-item" onClick={() => { onRate(); onClose() }}>
-          <span>❤️</span><span>맘에 드는 상대</span>
         </button>
         <button className="plus-menu-item danger" onClick={() => { onLeave(); onClose() }}>
           <span>🚪</span><span>채팅방 나가기</span>
@@ -385,6 +402,7 @@ interface RoomProps {
   room: ChatRoom
   currentUserId?: number
   currentNickname?: string
+  currentGender?: string
   onBack: () => void
   onSend: (text: string) => void
   onUpdateRoom: (room: ChatRoom) => void
@@ -392,7 +410,7 @@ interface RoomProps {
   onMutualMatch?: (dmRoomId: number, title: string, otherNickname: string) => void
 }
 
-export function ChatRoomView({ room, currentUserId, currentNickname, onBack, onSend, onUpdateRoom, onLeave, onMutualMatch }: RoomProps) {
+export function ChatRoomView({ room, currentUserId, currentNickname, currentGender, onBack, onSend, onUpdateRoom, onLeave, onMutualMatch }: RoomProps) {
   const [input, setInput]               = useState('')
   const [showPlus, setShowPlus]         = useState(false)
   const [showAppModal, setShowAppModal] = useState(false)
@@ -530,7 +548,16 @@ export function ChatRoomView({ room, currentUserId, currentNickname, onBack, onS
   } else if (!appt.verified) {
     rightBtn = <button className="btn-verify-header" onClick={() => setShowVerify(true)}>✅ 만난인증</button>
   } else {
-    rightBtn = <span className="btn-verified-header">✓ 인증완료</span>
+    rightBtn = (
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <span className="btn-verified-header">✓ 인증완료</span>
+        {!room.myLike && (
+          <button className="btn-verify-header" style={{ fontSize: '0.75rem', padding: '4px 8px' }} onClick={() => setShowPick(true)}>
+            ❤️ 선택
+          </button>
+        )}
+      </div>
+    )
   }
 
   return (
@@ -538,7 +565,6 @@ export function ChatRoomView({ room, currentUserId, currentNickname, onBack, onS
       {showPlus && (
         <PlusMenu
           onAppt={() => setShowAppModal(true)}
-          onRate={() => setShowPick(true)}
           onLeave={() => setShowLeave(true)}
           onClose={() => setShowPlus(false)}
         />
@@ -553,6 +579,7 @@ export function ChatRoomView({ room, currentUserId, currentNickname, onBack, onS
           memberDetails={room.memberDetails}
           currentUserId={currentUserId}
           currentNickname={currentNickname}
+          currentGender={currentGender}
           myLike={room.myLike}
           onClose={() => setShowPick(false)}
           onPicked={handlePicked}

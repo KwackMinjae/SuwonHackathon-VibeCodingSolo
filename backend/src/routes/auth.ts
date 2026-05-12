@@ -116,6 +116,11 @@ router.post('/register', async (req: Request, res: Response) => {
   const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email)
   if (existing) return res.status(409).json({ message: '이미 가입된 이메일입니다.' })
 
+  if (student_id?.trim()) {
+    const sidConflict = db.prepare('SELECT id FROM users WHERE student_id = ?').get(student_id.trim())
+    if (sidConflict) return res.status(409).json({ message: '이미 사용 중인 학번입니다.' })
+  }
+
   const passwordHash = await bcrypt.hash(password, 10)
   const sid = student_id?.trim() ?? ''
   const result = db.prepare(

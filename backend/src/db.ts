@@ -106,10 +106,21 @@ db.exec(`
     FOREIGN KEY (liker_id) REFERENCES users(id),
     FOREIGN KEY (likee_id) REFERENCES users(id)
   );
+
+  CREATE TABLE IF NOT EXISTS room_kicks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    room_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (room_id, user_id),
+    FOREIGN KEY (room_id) REFERENCES rooms(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
 `)
 
 // 마이그레이션 (기존 DB 호환)
 try { db.exec(`ALTER TABLE users ADD COLUMN student_id TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
 try { db.exec(`ALTER TABLE rooms ADD COLUMN allow_duplicate INTEGER NOT NULL DEFAULT 1`) } catch { /* already exists */ }
+try { db.exec(`CREATE TABLE IF NOT EXISTS room_kicks (id INTEGER PRIMARY KEY AUTOINCREMENT, room_id INTEGER NOT NULL, user_id INTEGER NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE (room_id, user_id), FOREIGN KEY (room_id) REFERENCES rooms(id), FOREIGN KEY (user_id) REFERENCES users(id))`) } catch { /* already exists */ }
 
 export default db
