@@ -11,6 +11,7 @@ import matchRoutes from './routes/match'
 import placesRoutes from './routes/places'
 import { setupSocket } from './socket'
 import { setIo } from './io'
+import { initDB } from './db'
 
 const app = express()
 const server = http.createServer(app)
@@ -42,13 +43,16 @@ setIo(io)
 setupSocket(io)
 
 const PORT = process.env.PORT || 8000
-server.listen(PORT, () => {
-  console.log(`\n서버 실행 중: http://localhost:${PORT}`)
-  if (process.env.SMTP_USER) {
-    console.log(`이메일 발송: ${process.env.SMTP_USER} (Gmail SMTP)`)
-  } else {
-    console.log('⚠️  SMTP 미설정 - .env 파일에 SMTP_USER, SMTP_PASS를 설정하세요')
-  }
-})
+
+initDB()
+  .then(() => {
+    server.listen(PORT, () => {
+      console.log(`\n서버 실행 중: http://localhost:${PORT}`)
+    })
+  })
+  .catch(err => {
+    console.error('[DB] 초기화 실패:', err)
+    process.exit(1)
+  })
 
 export { io }

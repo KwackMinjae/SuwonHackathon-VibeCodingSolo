@@ -7,22 +7,22 @@ const router = Router()
 router.use(authMiddleware)
 
 // 내 정보 조회
-router.get('/me', (req: AuthRequest, res: Response) => {
-  const user = db.prepare(
-    'SELECT id, email, nickname, gender, dept, student_id, created_at FROM users WHERE id = ?'
-  ).get(req.userId) as { id: number; email: string; nickname: string; gender: string; dept: string; student_id: string; created_at: string } | undefined
+router.get('/me', async (req: AuthRequest, res: Response) => {
+  const user = await db.get<{
+    id: number; email: string; nickname: string; gender: string; dept: string; student_id: string; created_at: string
+  }>('SELECT id, email, nickname, gender, dept, student_id, created_at FROM users WHERE id = ?', req.userId)
 
   if (!user) return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' })
   return res.json({ user })
 })
 
 // 닉네임 수정
-router.put('/profile', (req: AuthRequest, res: Response) => {
+router.put('/profile', async (req: AuthRequest, res: Response) => {
   const { nickname } = req.body as { nickname: string }
   if (!nickname) return res.status(400).json({ message: '닉네임을 입력해주세요.' })
   if (nickname.length > 10) return res.status(400).json({ message: '닉네임은 10자 이하여야 합니다.' })
 
-  db.prepare('UPDATE users SET nickname = ? WHERE id = ?').run(nickname, req.userId)
+  await db.run('UPDATE users SET nickname = ? WHERE id = ?', nickname, req.userId)
   return res.json({ message: '닉네임이 수정되었습니다.', nickname })
 })
 
@@ -32,14 +32,14 @@ router.put('/password', async (req: AuthRequest, res: Response) => {
   if (!currentPassword || !newPassword) return res.status(400).json({ message: '필수 항목이 누락되었습니다.' })
   if (newPassword.length < 8) return res.status(400).json({ message: '비밀번호는 8자 이상이어야 합니다.' })
 
-  const user = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.userId) as { password_hash: string } | undefined
+  const user = await db.get<{ password_hash: string }>('SELECT password_hash FROM users WHERE id = ?', req.userId)
   if (!user) return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' })
 
   const valid = await bcrypt.compare(currentPassword, user.password_hash)
   if (!valid) return res.status(401).json({ message: '현재 비밀번호가 올바르지 않습니다.' })
 
   const hash = await bcrypt.hash(newPassword, 10)
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.userId)
+  await db.run('UPDATE users SET password_hash = ? WHERE id = ?', hash, req.userId)
   return res.json({ message: '비밀번호가 변경되었습니다.' })
 })
 
@@ -48,7 +48,7 @@ router.delete('/me', async (req: AuthRequest, res: Response) => {
   const { password } = req.body as { password: string }
   if (!password) return res.status(400).json({ message: '비밀번호를 입력해주세요.' })
 
-  const user = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.userId) as { password_hash: string } | undefined
+  const user = await db.get<{ password_hash: string }>('SELECT password_hash FROM users WHERE id = ?', req.userId)
   if (!user) return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' })
 
   const valid = await bcrypt.compare(password, user.password_hash)
@@ -56,55 +56,52 @@ router.delete('/me', async (req: AuthRequest, res: Response) => {
 
   const uid = req.userId!
 
-  // likes FK 제거
-  db.prepare('DELETE FROM likes WHERE liker_id = ? OR likee_id = ?').run(uid, uid)
+  await db.run('DELETE FROM likes WHERE liker_id = ? OR likee_id = ?', uid, uid)
 
-  // 내가 방장인 방의 관련 데이터 모두 제거 (FK 순서 준수)
-  const hostedRooms = db.prepare('SELECT id FROM rooms WHERE host_id = ?').all(uid) as { id: number }[]
+  const hostedRooms = await db.all<{ id: number }>('SELECT id FROM rooms WHERE host_id = ?', uid)
   for (const room of hostedRooms) {
-    db.prepare('DELETE FROM likes WHERE room_id = ?').run(room.id)
-    db.prepare('DELETE FROM ratings WHERE room_id = ?').run(room.id)
-    db.prepare('DELETE FROM appointments WHERE room_id = ?').run(room.id)
-    db.prepare('DELETE FROM messages WHERE room_id = ?').run(room.id)
-    db.prepare('DELETE FROM room_members WHERE room_id = ?').run(room.id)
+    await db.run('DELETE FROM likes WHERE room_id = ?', room.id)
+    await db.run('DELETE FROM ratings WHERE room_id = ?', room.id)
+    await db.run('DELETE FROM appointments WHERE room_id = ?', room.id)
+    await db.run('DELETE FROM messages WHERE room_id = ?', room.id)
+    await db.run('DELETE FROM room_members WHERE room_id = ?', room.id)
   }
-  db.prepare('DELETE FROM rooms WHERE host_id = ?').run(uid)
-
-  // 다른 방의 멤버십 제거
-  db.prepare('DELETE FROM room_members WHERE user_id = ?').run(uid)
-  db.prepare('DELETE FROM match_queue WHERE user_id = ?').run(uid)
-  db.prepare('DELETE FROM users WHERE id = ?').run(uid)
+  await db.run('DELETE FROM rooms WHERE host_id = ?', uid)
+  await db.run('DELETE FROM room_members WHERE user_id = ?', uid)
+  await db.run('DELETE FROM match_queue WHERE user_id = ?', uid)
+  await db.run('DELETE FROM users WHERE id = ?', uid)
 
   return res.json({ message: '계정이 삭제되었습니다.' })
 })
 
 // 내가 참여한 활성 채팅방 목록 조회
-router.get('/me/rooms', (req: AuthRequest, res: Response) => {
+router.get('/me/rooms', async (req: AuthRequest, res: Response) => {
   try {
-    const rooms = db.prepare(`
-      SELECT r.id, r.title, r.capacity, r.team_gender AS teamGender, r.status, r.host_id AS hostId
+    const rooms = await db.all<{
+      id: number; title: string; capacity: number; teamGender: string; status: string; hostId: number
+    }>(`
+      SELECT r.id, r.title, r.capacity, r.team_gender AS "teamGender", r.status, r.host_id AS "hostId"
       FROM rooms r
       JOIN room_members rm ON rm.room_id = r.id
       WHERE rm.user_id = ? AND r.status IN ('active', 'waiting', 'seeking')
       ORDER BY r.created_at DESC
-    `).all(req.userId) as { id: number; title: string; capacity: number; teamGender: string; status: string; hostId: number }[]
+    `, req.userId)
 
-    const result = rooms.map(room => {
-      const members = db.prepare(`
+    const result = await Promise.all(rooms.map(async room => {
+      const members = await db.all<{
+        id: number; nickname: string; gender: string; dept: string; email: string; student_id: string
+      }>(`
         SELECT u.id, u.nickname, u.gender, u.dept, u.email, u.student_id
         FROM room_members rm JOIN users u ON u.id = rm.user_id
         WHERE rm.room_id = ?
         ORDER BY CASE WHEN u.id = ? THEN 0 ELSE 1 END, rm.id ASC
-      `).all(room.id, room.hostId) as { id: number; nickname: string; gender: string; dept: string; email: string; student_id: string }[]
+      `, room.id, room.hostId)
 
-      const messages = db.prepare(
-        'SELECT * FROM messages WHERE room_id = ? ORDER BY created_at ASC'
-      ).all(room.id)
-
-      const appointment = db.prepare('SELECT * FROM appointments WHERE room_id = ?').get(room.id)
+      const messages = await db.all('SELECT * FROM messages WHERE room_id = ? ORDER BY created_at ASC', room.id)
+      const appointment = await db.get('SELECT * FROM appointments WHERE room_id = ?', room.id)
 
       return { ...room, members, memberCount: members.length, messages, appointment }
-    })
+    }))
 
     return res.json({ rooms: result })
   } catch (e) {

@@ -52,22 +52,23 @@ router.post('/send-code', async (req: Request, res: Response) => {
   const fullEmail = `${email}@suwon.ac.kr`
 
   if (type === 'signup') {
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email)
+    const existing = await db.get('SELECT id FROM users WHERE email = ?', email)
     if (existing) return res.status(409).json({ message: '이미 가입된 이메일입니다.' })
   }
 
   if (type === 'reset') {
-    const user = db.prepare('SELECT id FROM users WHERE email = ?').get(email)
+    const user = await db.get('SELECT id FROM users WHERE email = ?', email)
     if (!user) return res.status(404).json({ message: '가입되지 않은 이메일입니다.' })
   }
 
   const code = generateCode()
   const expiresAt = Date.now() + 10 * 60 * 1000
 
-  db.prepare('DELETE FROM verification_codes WHERE email = ? AND type = ?').run(email, type)
-  db.prepare(
-    'INSERT INTO verification_codes (email, code, type, expires_at) VALUES (?, ?, ?, ?)'
-  ).run(email, code, type, expiresAt)
+  await db.run('DELETE FROM verification_codes WHERE email = ? AND type = ?', email, type)
+  await db.run(
+    'INSERT INTO verification_codes (email, code, type, expires_at) VALUES (?, ?, ?, ?)',
+    email, code, type, expiresAt
+  )
 
   try {
     await sendVerificationEmail(fullEmail, code)
@@ -80,19 +81,20 @@ router.post('/send-code', async (req: Request, res: Response) => {
 })
 
 // 인증코드 확인
-router.post('/verify-code', (req: Request, res: Response) => {
+router.post('/verify-code', async (req: Request, res: Response) => {
   const { email, code, type } = req.body as { email: string; code: string; type: string }
   if (!email || !code || !type) return res.status(400).json({ message: '필수 항목이 누락되었습니다.' })
 
-  const row = db.prepare(
-    'SELECT * FROM verification_codes WHERE email = ? AND type = ? AND used = 0 ORDER BY id DESC LIMIT 1'
-  ).get(email, type) as { id: number; code: string; expires_at: number } | undefined
+  const row = await db.get<{ id: number; code: string; expires_at: number }>(
+    'SELECT * FROM verification_codes WHERE email = ? AND type = ? AND used = 0 ORDER BY id DESC LIMIT 1',
+    email, type
+  )
 
   if (!row) return res.status(400).json({ message: '인증번호를 먼저 전송해주세요.' })
-  if (Date.now() > row.expires_at) return res.status(400).json({ message: '인증번호가 만료되었습니다.' })
+  if (Date.now() > Number(row.expires_at)) return res.status(400).json({ message: '인증번호가 만료되었습니다.' })
   if (row.code !== code) return res.status(400).json({ message: '인증번호가 올바르지 않습니다.' })
 
-  db.prepare('UPDATE verification_codes SET used = 1 WHERE id = ?').run(row.id)
+  await db.run('UPDATE verification_codes SET used = 1 WHERE id = ?', row.id)
   return res.json({ message: '인증 완료' })
 })
 
@@ -108,26 +110,28 @@ router.post('/register', async (req: Request, res: Response) => {
   if (password.length < 8) return res.status(400).json({ message: '비밀번호는 8자 이상이어야 합니다.' })
   if (nickname.length > 10) return res.status(400).json({ message: '닉네임은 10자 이하여야 합니다.' })
 
-  const verified = db.prepare(
-    'SELECT id FROM verification_codes WHERE email = ? AND type = ? AND used = 1 ORDER BY id DESC LIMIT 1'
-  ).get(email, 'signup')
+  const verified = await db.get(
+    'SELECT id FROM verification_codes WHERE email = ? AND type = ? AND used = 1 ORDER BY id DESC LIMIT 1',
+    email, 'signup'
+  )
   if (!verified) return res.status(403).json({ message: '이메일 인증을 먼저 완료해주세요.' })
 
-  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email)
+  const existing = await db.get('SELECT id FROM users WHERE email = ?', email)
   if (existing) return res.status(409).json({ message: '이미 가입된 이메일입니다.' })
 
   if (student_id?.trim()) {
-    const sidConflict = db.prepare('SELECT id FROM users WHERE student_id = ?').get(student_id.trim())
+    const sidConflict = await db.get('SELECT id FROM users WHERE student_id = ?', student_id.trim())
     if (sidConflict) return res.status(409).json({ message: '이미 사용 중인 학번입니다.' })
   }
 
   const passwordHash = await bcrypt.hash(password, 10)
   const sid = student_id?.trim() ?? ''
-  const result = db.prepare(
-    'INSERT INTO users (email, password_hash, nickname, gender, dept, student_id) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(email, passwordHash, nickname, gender, dept, sid) as { lastInsertRowid: number }
+  const result = await db.run(
+    'INSERT INTO users (email, password_hash, nickname, gender, dept, student_id) VALUES (?, ?, ?, ?, ?, ?)',
+    email, passwordHash, nickname, gender, dept, sid
+  )
 
-  const userId = Number(result.lastInsertRowid)
+  const userId = result.lastInsertRowid
   const token = signToken(userId, email)
 
   return res.status(201).json({
@@ -141,9 +145,9 @@ router.post('/login', async (req: Request, res: Response) => {
   const { email, password } = req.body as { email: string; password: string }
   if (!email || !password) return res.status(400).json({ message: '이메일과 비밀번호를 입력해주세요.' })
 
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as {
+  const user = await db.get<{
     id: number; email: string; password_hash: string; nickname: string; gender: string; dept: string; student_id: string
-  } | undefined
+  }>('SELECT * FROM users WHERE email = ?', email)
 
   if (!user) return res.status(401).json({ message: '이메일 또는 비밀번호가 올바르지 않습니다.' })
 
@@ -163,13 +167,14 @@ router.post('/reset-password', async (req: Request, res: Response) => {
   if (!email || !password) return res.status(400).json({ message: '필수 항목이 누락되었습니다.' })
   if (password.length < 8) return res.status(400).json({ message: '비밀번호는 8자 이상이어야 합니다.' })
 
-  const verified = db.prepare(
-    'SELECT id FROM verification_codes WHERE email = ? AND type = ? AND used = 1 ORDER BY id DESC LIMIT 1'
-  ).get(email, 'reset')
+  const verified = await db.get(
+    'SELECT id FROM verification_codes WHERE email = ? AND type = ? AND used = 1 ORDER BY id DESC LIMIT 1',
+    email, 'reset'
+  )
   if (!verified) return res.status(403).json({ message: '이메일 인증을 먼저 완료해주세요.' })
 
   const passwordHash = await bcrypt.hash(password, 10)
-  const result = db.prepare('UPDATE users SET password_hash = ? WHERE email = ?').run(passwordHash, email) as { changes: number }
+  const result = await db.run('UPDATE users SET password_hash = ? WHERE email = ?', passwordHash, email)
   if (result.changes === 0) return res.status(404).json({ message: '존재하지 않는 사용자입니다.' })
 
   return res.json({ message: '비밀번호가 재설정되었습니다.' })
