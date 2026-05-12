@@ -34,6 +34,11 @@ export interface TeamState {
   isSeeking: boolean
 }
 
+export interface SoloQueueState {
+  matchSize: number
+  allowDuplicate: boolean
+}
+
 type View = 'host-setup' | 'host-wait' | 'seeking' | 'join-input' | 'join-wait' | 'result' | 'quick-match'
 
 interface MatchResult {
@@ -52,20 +57,24 @@ export interface MatchStartedPayload {
 interface Props {
   onBack: () => void
   onGoToMain: (state: TeamState) => void
+  onGoToMainSolo?: (state: SoloQueueState) => void
   currentUser: UserProfile
   onMatchSuccess: (matchedUsers: MockUser[], size: number, roomId?: number) => void
   onRoomCreated?: (room: AvailableRoom) => void
   teamStateResume?: TeamState
+  soloStateResume?: SoloQueueState
   initialView?: View
 }
 
 export default function RandomMatchScreen({
   onBack,
   onGoToMain,
+  onGoToMainSolo,
   currentUser,
   onMatchSuccess,
   onRoomCreated,
   teamStateResume,
+  soloStateResume,
   initialView = 'host-setup',
 }: Props) {
   const getInitialView = (): View => {
@@ -90,13 +99,13 @@ export default function RandomMatchScreen({
   const [loading, setLoading]   = useState(false)
   const [kickingIdx, setKickingIdx] = useState<number | null>(null)
 
-  // 빠른 매칭 상태
-  const [quickMatchSize, setQuickMatchSize] = useState(2)
-  const [quickMatchActive, setQuickMatchActive] = useState(false)
-  const [queueStatus, setQueueStatus] = useState({ myCount: 0, theirCount: 0, needed: 2 })
+  // 빠른 매칭 상태 (soloStateResume이 있으면 복원)
+  const [quickMatchSize, setQuickMatchSize] = useState(soloStateResume?.matchSize ?? 2)
+  const [quickMatchActive, setQuickMatchActive] = useState(!!soloStateResume)
+  const [queueStatus, setQueueStatus] = useState({ myCount: soloStateResume ? 1 : 0, theirCount: 0, needed: soloStateResume?.matchSize ?? 2 })
 
   // 학과 중복 옵션 (host-setup & quick-match 공통)
-  const [allowDuplicate, setAllowDuplicate] = useState(true)
+  const [allowDuplicate, setAllowDuplicate] = useState(soloStateResume?.allowDuplicate ?? true)
 
   // 최신 값을 effect 클로저 안에서 참조하기 위한 ref
   const goToMainRef = useRef(onGoToMain)
@@ -132,7 +141,7 @@ export default function RandomMatchScreen({
     onMatchSuccess(others, data.size, data.roomId)
   }, [currentUser, onMatchSuccess, myGender])
 
-  // 빠른 매칭 소켓 — view가 quick-match이면 항상 리스너 등록 (emit 전에 리스너가 있어야 응답을 받음)
+  // 빠른 매칭 소켓
   useEffect(() => {
     if (view !== 'quick-match') return
     const socket = getSocket()
@@ -147,6 +156,11 @@ export default function RandomMatchScreen({
 
     socket.on('solo-queue-status', onStatus)
     socket.on('match-started', onMatchStarted)
+
+    // 메인화면에서 복귀한 경우 서버에 재등록하여 현재 큐 상태 수신
+    if (soloStateResume) {
+      socket.emit('solo-queue-join', { matchSize: soloStateResume.matchSize, allowDuplicate: soloStateResume.allowDuplicate })
+    }
 
     return () => {
       socket.off('solo-queue-status', onStatus)
@@ -334,6 +348,10 @@ export default function RandomMatchScreen({
       isHost: isHostOfRoom,
       isSeeking: view === 'seeking',
     })
+  }
+
+  const handleGoToMainSolo = () => {
+    onGoToMainSolo?.({ matchSize: quickMatchSize, allowDuplicate })
   }
 
   const handleStartQuickMatch = () => {
@@ -613,7 +631,16 @@ export default function RandomMatchScreen({
 
   if (view === 'quick-match') return (
     <div className="match-wrap">
-      <button className="btn-back" onClick={() => { handleLeaveQuickMatch(); onBack() }}>← 뒤로</button>
+      {quickMatchActive ? (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <button className="btn-back" style={{ position: 'static', margin: 0 }} onClick={() => { handleLeaveQuickMatch(); onBack() }}>← 매칭 취소</button>
+          <button style={{ background: 'none', border: 'none', color: '#888', fontSize: '0.82rem', cursor: 'pointer' }} onClick={handleGoToMainSolo}>
+            메인화면으로 →
+          </button>
+        </div>
+      ) : (
+        <button className="btn-back" onClick={() => { handleLeaveQuickMatch(); onBack() }}>← 뒤로</button>
+      )}
       <h2 className="match-title">빠른 매칭</h2>
       <p className="step-desc">혼자 참여해도 자동으로 팀이 구성돼요!</p>
 
@@ -665,9 +692,6 @@ export default function RandomMatchScreen({
               {quickMatchSize}v{quickMatchSize} · 양쪽 모두 {quickMatchSize}명이 모이면 자동으로 매칭돼요
             </p>
           </div>
-          <button className="btn-signup" onClick={handleLeaveQuickMatch} style={{ marginTop: 8, width: '100%' }}>
-            매칭 취소
-          </button>
         </>
       )}
     </div>

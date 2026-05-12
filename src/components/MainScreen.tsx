@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import SettingsTab from './SettingsTab'
 import { ChatList, ChatRoomView, ChatRoom, ChatMessage } from './ChatScreen'
-import RandomMatchScreen, { UserProfile, MockUser, TeamState, MatchStartedPayload } from './RandomMatchScreen'
+import RandomMatchScreen, { UserProfile, MockUser, TeamState, SoloQueueState, MatchStartedPayload } from './RandomMatchScreen'
 import { api } from '../api/client'
 import { getSocket } from '../api/socket'
 
@@ -36,7 +36,8 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
   const [sub, setSub]           = useState<SubScreen>(null)
   const [chatRooms, setChatRooms]   = useState<ChatRoom[]>([])
   const [activeRoom, setActiveRoom] = useState<ChatRoom | null>(null)
-  const [teamState, setTeamState]   = useState<TeamState | null>(null)
+  const [teamState, setTeamState]     = useState<TeamState | null>(null)
+  const [soloQueueState, setSoloQueueState] = useState<SoloQueueState | null>(null)
 
   const handleMatchSuccess = (matchedUsers: MockUser[], size: number, roomId?: number) => {
     const t = nowTime()
@@ -113,6 +114,47 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
       socket.off('room-closed', onRoomClosed)
     }
   }, [teamState?.roomId, sub])
+
+  // 빠른 매칭 백그라운드 처리
+  useEffect(() => {
+    if (!soloQueueState) return
+    if (sub === 'quick-match') return
+
+    const socket = getSocket()
+    const onMatchStarted = (data: MatchStartedPayload) => {
+      const myGender = currentUser.gender
+      const matchedUsers = data.members
+        .filter(m => m.id !== currentUser.id)
+        .map(m => ({
+          id: m.id,
+          nickname: m.nickname,
+          studentId: m.student_id || '',
+          gender: m.gender as '남' | '여',
+          dept: m.dept,
+        }))
+      handleMatchSuccess(matchedUsers, data.size, data.roomId)
+      setSoloQueueState(null)
+    }
+
+    socket.on('match-started', onMatchStarted)
+    return () => { socket.off('match-started', onMatchStarted) }
+  }, [soloQueueState, sub])
+
+  const handleGoToMainSolo = useCallback((state: SoloQueueState) => {
+    setSoloQueueState(state)
+    setSub(null)
+  }, [])
+
+  const handleCancelSoloQueue = () => {
+    if (!soloQueueState) return
+    getSocket().emit('solo-queue-leave', { matchSize: soloQueueState.matchSize })
+    setSoloQueueState(null)
+  }
+
+  const handleResumeSoloQueue = () => {
+    if (!soloQueueState) return
+    setSub('quick-match')
+  }
 
   const handleOpenRoom = (room: ChatRoom) => {
     setActiveRoom(room)
@@ -212,10 +254,12 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
   )
   if (sub === 'quick-match') return (
     <RandomMatchScreen
-      onBack={() => setSub(null)}
+      onBack={() => { setSoloQueueState(null); setSub(null) }}
       onGoToMain={handleGoToMain}
+      onGoToMainSolo={handleGoToMainSolo}
       currentUser={currentUser}
       onMatchSuccess={handleMatchSuccess}
+      soloStateResume={soloQueueState ?? undefined}
       initialView="quick-match"
     />
   )
@@ -268,6 +312,55 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
           </button>
         ))}
       </nav>
+
+      {/* 빠른 매칭 대기 팝업 */}
+      {soloQueueState && !teamState && (
+        <div
+          onClick={handleResumeSoloQueue}
+          style={{
+            position: 'fixed',
+            bottom: 70,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 'calc(100% - 32px)',
+            maxWidth: 390,
+            background: 'linear-gradient(135deg, #ff6b9d, #ff8c69)',
+            borderRadius: 16,
+            padding: '14px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            cursor: 'pointer',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
+            zIndex: 200,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: '1.5rem', animation: 'heartSpin 1s linear infinite' }}>💘</span>
+            <div>
+              <p style={{ margin: 0, fontWeight: 700, color: '#fff', fontSize: '0.95rem' }}>빠른 매칭 중...</p>
+              <p style={{ margin: 0, color: 'rgba(255,255,255,0.85)', fontSize: '0.78rem' }}>
+                {soloQueueState.matchSize}v{soloQueueState.matchSize} · 탭해서 돌아가기
+              </p>
+            </div>
+          </div>
+          <button
+            style={{
+              background: 'rgba(255,255,255,0.22)',
+              border: 'none',
+              color: '#fff',
+              borderRadius: 8,
+              padding: '5px 12px',
+              fontSize: '0.78rem',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+            onClick={e => { e.stopPropagation(); handleCancelSoloQueue() }}
+          >
+            취소
+          </button>
+        </div>
+      )}
 
       {/* 팀 대기/매칭 중 팝업 */}
       {teamState && (
