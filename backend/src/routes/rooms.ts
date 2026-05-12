@@ -12,7 +12,7 @@ function makeCode() {
 
 // 방 만들기
 router.post('/', (req: AuthRequest, res: Response) => {
-  const { capacity, teamGender } = req.body as { capacity: number; teamGender: string }
+  const { capacity, teamGender, allowDuplicate } = req.body as { capacity: number; teamGender: string; allowDuplicate?: boolean }
   if (!capacity || !teamGender) return res.status(400).json({ message: '인원수와 팀 성별이 필요합니다.' })
 
   const user = db.prepare('SELECT nickname FROM users WHERE id = ?').get(req.userId) as { nickname: string }
@@ -21,8 +21,8 @@ router.post('/', (req: AuthRequest, res: Response) => {
   while (db.prepare('SELECT id FROM rooms WHERE code = ?').get(code)) code = makeCode()
 
   const result = db.prepare(
-    'INSERT INTO rooms (title, code, host_id, capacity, team_gender) VALUES (?, ?, ?, ?, ?)'
-  ).run(title, code, req.userId, capacity, teamGender) as { lastInsertRowid: number }
+    'INSERT INTO rooms (title, code, host_id, capacity, team_gender, allow_duplicate) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(title, code, req.userId, capacity, teamGender, allowDuplicate !== false ? 1 : 0) as { lastInsertRowid: number }
 
   const roomId = Number(result.lastInsertRowid)
   db.prepare('INSERT INTO room_members (room_id, user_id) VALUES (?, ?)').run(roomId, req.userId)

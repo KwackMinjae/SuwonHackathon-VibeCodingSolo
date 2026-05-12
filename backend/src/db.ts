@@ -107,9 +107,8 @@ db.exec(`
   );
 `)
 
-// student_id 컬럼 마이그레이션 (기존 DB 호환)
-try {
-  db.exec(`ALTER TABLE users ADD COLUMN student_id TEXT NOT NULL DEFAULT ''`)
-} catch { /* already exists */ }
+// 마이그레이션 (기존 DB 호환)
+try { db.exec(`ALTER TABLE users ADD COLUMN student_id TEXT NOT NULL DEFAULT ''`) } catch { /* already exists */ }
+try { db.exec(`ALTER TABLE rooms ADD COLUMN allow_duplicate INTEGER NOT NULL DEFAULT 1`) } catch { /* already exists */ }
 
 export default db

@@ -95,6 +95,9 @@ export default function RandomMatchScreen({
   const [quickMatchActive, setQuickMatchActive] = useState(false)
   const [queueStatus, setQueueStatus] = useState({ myCount: 0, theirCount: 0, needed: 2 })
 
+  // 학과 중복 옵션 (host-setup & quick-match 공통)
+  const [allowDuplicate, setAllowDuplicate] = useState(true)
+
   // 최신 값을 effect 클로저 안에서 참조하기 위한 ref
   const goToMainRef = useRef(onGoToMain)
   useEffect(() => { goToMainRef.current = onGoToMain }, [onGoToMain])
@@ -265,7 +268,7 @@ export default function RandomMatchScreen({
     setLoading(true)
     try {
       const data = await api.post<{ room: { id: number; title: string; code: string; capacity: number; teamGender: string; memberCount: number } }>(
-        '/rooms', { capacity: matchSize, teamGender: myGender }, true
+        '/rooms', { capacity: matchSize, teamGender: myGender, allowDuplicate }, true
       )
       const { room } = data
       setRoomCode(room.code)
@@ -334,10 +337,9 @@ export default function RandomMatchScreen({
   }
 
   const handleStartQuickMatch = () => {
-    // 본인이 큐에 들어가므로 myCount를 1로 미리 표시 (서버 응답으로 덮어써짐)
     setQueueStatus({ myCount: 1, theirCount: 0, needed: quickMatchSize })
     setQuickMatchActive(true)
-    getSocket().emit('solo-queue-join', { matchSize: quickMatchSize })
+    getSocket().emit('solo-queue-join', { matchSize: quickMatchSize, allowDuplicate })
   }
 
   const handleLeaveQuickMatch = () => {
@@ -388,6 +390,8 @@ export default function RandomMatchScreen({
           우리 팀 {myGender}자 {matchSize}명 vs 상대팀 {otherGender}자 {matchSize}명
         </p>
       </div>
+
+      <DuplicateToggle value={allowDuplicate} onChange={setAllowDuplicate} />
 
       <button className="btn-login" onClick={createRoom} disabled={loading}>
         {loading ? '생성 중...' : '방 만들기'}
@@ -630,6 +634,8 @@ export default function RandomMatchScreen({
               {myGender}자 {quickMatchSize}명 + {otherGender}자 {quickMatchSize}명이 모이면 자동 매칭
             </p>
           </div>
+          <DuplicateToggle value={allowDuplicate} onChange={setAllowDuplicate} />
+
           <button className="btn-login" onClick={handleStartQuickMatch}>
             빠른 매칭 시작 💘
           </button>
@@ -668,6 +674,43 @@ export default function RandomMatchScreen({
   )
 
   return null
+}
+
+function DuplicateToggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="input-group" style={{ marginTop: 4 }}>
+      <label>상대팀 학과 중복</label>
+      <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+        <button
+          onClick={() => onChange(true)}
+          style={{
+            flex: 1, padding: '10px 0', borderRadius: 10, border: '1.5px solid',
+            borderColor: value ? '#5b87ff' : '#ddd',
+            background: value ? '#eef2ff' : '#fafafa',
+            color: value ? '#3a5fcc' : '#888',
+            fontWeight: value ? 700 : 400, cursor: 'pointer', fontSize: '0.88rem',
+          }}>
+          상관없음
+        </button>
+        <button
+          onClick={() => onChange(false)}
+          style={{
+            flex: 1, padding: '10px 0', borderRadius: 10, border: '1.5px solid',
+            borderColor: !value ? '#ff6b9d' : '#ddd',
+            background: !value ? '#fff0f5' : '#fafafa',
+            color: !value ? '#cc2255' : '#888',
+            fontWeight: !value ? 700 : 400, cursor: 'pointer', fontSize: '0.88rem',
+          }}>
+          겹치면 안 됨
+        </button>
+      </div>
+      <p className="step-desc" style={{ marginTop: 6, fontSize: '0.78rem' }}>
+        {value
+          ? '상대팀에 같은 학과가 있어도 매칭돼요.'
+          : '상대팀에 같은 학과가 있으면 매칭이 반려돼요.'}
+      </p>
+    </div>
+  )
 }
 
 function QueueBar({ label, count, needed, color }: { label: string; count: number; needed: number; color: string }) {
