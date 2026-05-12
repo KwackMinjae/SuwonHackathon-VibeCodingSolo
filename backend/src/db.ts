@@ -36,6 +36,7 @@ db.exec(`
     host_id INTEGER NOT NULL,
     capacity INTEGER NOT NULL,
     team_gender TEXT NOT NULL,
+    allow_duplicate INTEGER NOT NULL DEFAULT 1,
     status TEXT DEFAULT 'waiting',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (host_id) REFERENCES users(id)
