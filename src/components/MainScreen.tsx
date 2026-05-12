@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import SettingsTab from './SettingsTab'
 import { ChatList, ChatRoomView, ChatRoom, ChatMessage } from './ChatScreen'
 import RandomMatchScreen, { UserProfile, MockUser, TeamState, MatchStartedPayload } from './RandomMatchScreen'
@@ -169,10 +169,10 @@ export default function MainScreen({ onLogout, onAccountDeleted, onPasswordReset
     setTab('채팅방')
   }
 
-  const handleGoToMain = (state: TeamState) => {
+  const handleGoToMain = useCallback((state: TeamState) => {
     setTeamState(state)
     setSub(null)
-  }
+  }, [])
 
   const handleCancelTeam = async () => {
     if (!teamState) return

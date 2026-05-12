@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { api } from '../api/client'
 import { getSocket } from '../api/socket'
 
@@ -90,6 +90,20 @@ export default function RandomMatchScreen({
   const [loading, setLoading]   = useState(false)
   const [kickingIdx, setKickingIdx] = useState<number | null>(null)
 
+  // 최신 값을 effect 클로저 안에서 참조하기 위한 ref
+  const goToMainRef = useRef(onGoToMain)
+  useEffect(() => { goToMainRef.current = onGoToMain }, [onGoToMain])
+  const roomIdRef    = useRef(roomId)
+  const roomCodeRef  = useRef(roomCode)
+  const joinCodeRef  = useRef(joinCode)
+  const matchSizeRef = useRef(matchSize)
+  const isHostRef    = useRef(isHostOfRoom)
+  useEffect(() => { roomIdRef.current = roomId }, [roomId])
+  useEffect(() => { roomCodeRef.current = roomCode }, [roomCode])
+  useEffect(() => { joinCodeRef.current = joinCode }, [joinCode])
+  useEffect(() => { matchSizeRef.current = matchSize }, [matchSize])
+  useEffect(() => { isHostRef.current = isHostOfRoom }, [isHostOfRoom])
+
   const myGender = currentUser.gender
   const otherGender: '남' | '여' = myGender === '남' ? '여' : '남'
 
@@ -129,7 +143,16 @@ export default function RandomMatchScreen({
       if (data.hostId) setHostId(data.hostId)
     }
     const onMatchStarted = (data: MatchStartedPayload) => processMatchResult(data)
-    const onMatchSeeking = () => setView('seeking')
+    const onMatchSeeking = () => {
+      // 매칭 시작되면 자동으로 메인화면으로 이동 (백그라운드에서 매칭 유지)
+      goToMainRef.current({
+        roomId: roomIdRef.current,
+        roomCode: roomCodeRef.current,
+        matchSize: matchSizeRef.current,
+        isHost: isHostRef.current,
+        isSeeking: true,
+      })
+    }
     const onKicked = () => { alert('방에서 추방되었습니다.'); onBack() }
     const onRoomClosed = () => { alert('방장이 방을 나갔습니다.'); onBack() }
 
@@ -180,7 +203,15 @@ export default function RandomMatchScreen({
       if (data.hostId) setJoinRoomHostId(data.hostId)
     }
     const onMatchStarted = (data: MatchStartedPayload) => processMatchResult(data)
-    const onMatchSeeking = () => setView('seeking')  // 팀원도 매칭 대기 화면 진입
+    const onMatchSeeking = () => {
+      goToMainRef.current({
+        roomId: roomIdRef.current,
+        roomCode: joinCodeRef.current || roomCodeRef.current,
+        matchSize: matchSizeRef.current,
+        isHost: false,
+        isSeeking: true,
+      })
+    }
     const onKicked = () => { alert('방에서 추방되었습니다.'); setView('join-input') }
     const onRoomClosed = () => { alert('방장이 방을 나갔습니다.'); setView('join-input') }
 
