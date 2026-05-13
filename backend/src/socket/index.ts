@@ -129,29 +129,32 @@ async function tryCreateSoloMatch(io: IOServer, matchSize: number, gender: strin
 
   if (myQueue.length < matchSize || theirQueue.length < matchSize) return
 
-  const myTeam = myQueue.slice(0, matchSize)
-  const myDeptSet = new Set(myTeam.map(u => u.dept))
-  const myAllowDuplicate = myTeam.every(u => u.allowDuplicate)
+  // 양쪽 큐 모두 슬라이딩 윈도우로 호환 조합 탐색
+  for (let mi = 0; mi <= myQueue.length - matchSize; mi++) {
+    const myTeam = myQueue.slice(mi, mi + matchSize)
+    const myDeptSet = new Set(myTeam.map(u => u.dept))
+    const myAllowDuplicate = myTeam.every(u => u.allowDuplicate)
 
-  for (let i = 0; i <= theirQueue.length - matchSize; i++) {
-    const theirTeam = theirQueue.slice(i, i + matchSize)
-    const theirDeptSet = new Set(theirTeam.map(u => u.dept))
-    const theirAllowDuplicate = theirTeam.every(u => u.allowDuplicate)
+    for (let ti = 0; ti <= theirQueue.length - matchSize; ti++) {
+      const theirTeam = theirQueue.slice(ti, ti + matchSize)
+      const theirDeptSet = new Set(theirTeam.map(u => u.dept))
+      const theirAllowDuplicate = theirTeam.every(u => u.allowDuplicate)
 
-    if (canMatch(
-      { deptSet: myDeptSet, allowDuplicate: myAllowDuplicate },
-      { deptSet: theirDeptSet, allowDuplicate: theirAllowDuplicate }
-    )) {
-      const myMatchedIds = new Set(myTeam.map(u => u.userId))
-      const theirMatchedIds = new Set(theirTeam.map(u => u.userId))
-      soloQueue.set(myKey, myQueue.filter(u => !myMatchedIds.has(u.userId)))
-      soloQueue.set(theirKey, theirQueue.filter(u => !theirMatchedIds.has(u.userId)))
+      if (canMatch(
+        { deptSet: myDeptSet, allowDuplicate: myAllowDuplicate },
+        { deptSet: theirDeptSet, allowDuplicate: theirAllowDuplicate }
+      )) {
+        const myMatchedIds = new Set(myTeam.map(u => u.userId))
+        const theirMatchedIds = new Set(theirTeam.map(u => u.userId))
+        soloQueue.set(myKey, myQueue.filter(u => !myMatchedIds.has(u.userId)))
+        soloQueue.set(theirKey, theirQueue.filter(u => !theirMatchedIds.has(u.userId)))
 
-      await createMatchRoomAndNotify(io, matchSize, gender, myTeam, theirTeam)
+        await createMatchRoomAndNotify(io, matchSize, gender, myTeam, theirTeam)
 
-      broadcastQueueStatus(io, matchSize, gender)
-      broadcastQueueStatus(io, matchSize, oppositeGender)
-      return
+        broadcastQueueStatus(io, matchSize, gender)
+        broadcastQueueStatus(io, matchSize, oppositeGender)
+        return
+      }
     }
   }
 }
